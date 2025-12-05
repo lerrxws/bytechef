@@ -28,12 +28,13 @@ jobs:
           distribution: 'graalvm-community'
           java-version: '25'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Cache SonarCloud packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
+      # - name: Cache SonarCloud packages
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: ~/.sonar/cache
+      #     key: ${{ runner.os }}-sonar
+      #     restore-keys: ${{ runner.os }}-sonar
+      # do not support that much code fo free
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
@@ -66,11 +67,12 @@ jobs:
         run: |
           npm ci
           npm run check
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # - name: SonarCloud Scan
+      #   uses: SonarSource/sonarcloud-github-action@master
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # do not support that much code fo free
         with:
           projectBaseDir: client/
 
