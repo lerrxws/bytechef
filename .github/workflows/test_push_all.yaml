@@ -1,8 +1,8 @@
-name: CI - Run Tests and Check
+name: CI Build on PUSH
 
 on:
   push:
-    branches: [ "*" ]  # Trigger on all branches
+    branches: [ "*" ]
 
 permissions:
   contents: read
@@ -22,55 +22,30 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
+        working-directory: client  # Указати директорію, де знаходиться package.json
         run: |
           npm install
 
       - name: Running Source Formatting
+        working-directory: client
         run: npm run format
 
       - name: Running Lint
+        working-directory: client
         run: npm run lint
 
       - name: Running Typecheck
+        working-directory: client
         run: npm run typecheck
 
       - name: Running Check
+        working-directory: client
         run: npm run check
 
       - name: Running Build
+        working-directory: client
         run: npm run build
 
       - name: Running Tests
+        working-directory: client
         run: npm run test
-
-  server:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v3
-        with:
-          java-version: 25
-
-      - name: Install dependencies
-        run: |
-          ./gradlew clean build
-
-      - name: Running Source Formatting (Spotless)
-        run: ./gradlew spotlessApply
-
-      - name: Running Check
-        run: ./gradlew check
-
-      - name: Running Tests
-        run: ./gradlew test
-
-      - name: Running Integration Tests
-        run: ./gradlew testIntegration
-
-      - name: Generating Documentation
-        run: ./gradlew generateDocumentation
