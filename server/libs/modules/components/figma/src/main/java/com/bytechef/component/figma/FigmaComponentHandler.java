@@ -19,21 +19,23 @@ package com.bytechef.component.figma;
 import static com.bytechef.component.definition.Authorization.AUTHORIZATION;
 import static com.bytechef.component.definition.Authorization.CLIENT_ID;
 import static com.bytechef.component.definition.Authorization.CLIENT_SECRET;
-import static com.bytechef.component.definition.ComponentDsl.authorization;
-import static com.bytechef.component.definition.ComponentDsl.string;
 
 import com.bytechef.component.OpenApiComponentHandler;
+import com.bytechef.component.definition.Authorization;
 import com.bytechef.component.definition.Authorization.AuthorizationCallbackResponse;
-import com.bytechef.component.definition.Authorization.AuthorizationType;
 import com.bytechef.component.definition.ComponentCategory;
+import com.bytechef.component.definition.ComponentDsl.ModifiableAuthorization;
 import com.bytechef.component.definition.ComponentDsl.ModifiableComponentDefinition;
 import com.bytechef.component.definition.ComponentDsl.ModifiableConnectionDefinition;
+import com.bytechef.component.definition.ComponentDsl.ModifiableTriggerDefinition;
 import com.bytechef.component.definition.Context.Http;
 import com.bytechef.component.definition.TypeReference;
+import com.bytechef.component.figma.trigger.FigmaNewCommentTrigger;
 import com.google.auto.service.AutoService;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import javax.naming.ConfigurationException;
 
 /**
@@ -41,6 +43,11 @@ import javax.naming.ConfigurationException;
  */
 @AutoService(OpenApiComponentHandler.class)
 public class FigmaComponentHandler extends AbstractFigmaComponentHandler {
+
+    @Override
+    public List<ModifiableTriggerDefinition> getTriggers() {
+        return List.of(FigmaNewCommentTrigger.TRIGGER_DEFINITION);
+    }
 
     @Override
     public ModifiableComponentDefinition modifyComponent(ModifiableComponentDefinition modifiableComponentDefinition) {
@@ -51,23 +58,17 @@ public class FigmaComponentHandler extends AbstractFigmaComponentHandler {
     }
 
     @Override
-    public ModifiableConnectionDefinition
-        modifyConnection(ModifiableConnectionDefinition modifiableConnectionDefinition) {
-        return modifiableConnectionDefinition
-            .baseUri((connectionParameters, context) -> "https://api.figma.com")
-            .authorizations(authorization(AuthorizationType.OAUTH2_AUTHORIZATION_CODE)
-                .title("OAuth2 Authorization Code")
-                .properties(
-                    string(CLIENT_ID)
-                        .label("Client Id")
-                        .required(true),
-                    string(CLIENT_SECRET)
-                        .label("Client Secret")
-                        .required(true))
-                .authorizationUrl((connectionParameters, context) -> "https://www.figma.com/oauth")
-                .scopes((connection, context) -> List.of("file_comments:write", "files:read"))
-                .tokenUrl((connectionParameters, context) -> "https://api.figma.com/v1/oauth/token")
-                .refreshUrl((connectionParameters, context) -> "https://api.figma.com/v1/oauth/refresh")
+    public ModifiableConnectionDefinition modifyConnection(
+        ModifiableConnectionDefinition modifiableConnectionDefinition) {
+
+        Optional<List<? extends Authorization>> optionalAuthorizations =
+            modifiableConnectionDefinition.getAuthorizations();
+
+        if (optionalAuthorizations.isPresent()) {
+            List<? extends Authorization> authorizations = optionalAuthorizations.get();
+            ModifiableAuthorization modifiableAuthorization = (ModifiableAuthorization) authorizations.getFirst();
+
+            modifiableAuthorization
                 .authorizationCallback((connectionParameters, code, redirectUri, codeVerifier, context) -> {
                     String clientId = connectionParameters.getString(CLIENT_ID);
                     String clientSecret = connectionParameters.getString(CLIENT_SECRET);
@@ -98,6 +99,9 @@ public class FigmaComponentHandler extends AbstractFigmaComponentHandler {
                     }
 
                     return new AuthorizationCallbackResponse(response.getBody(new TypeReference<>() {}));
-                }));
+                });
+        }
+
+        return modifiableConnectionDefinition;
     }
 }

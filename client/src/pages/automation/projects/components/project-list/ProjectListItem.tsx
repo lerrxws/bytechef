@@ -1,4 +1,5 @@
 import '@/shared/styles/dropdownMenu.css';
+import Badge from '@/components/Badge/Badge';
 import Button from '@/components/Button/Button';
 import {
     AlertDialog,
@@ -10,7 +11,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {Badge} from '@/components/ui/badge';
+import {ButtonGroup} from '@/components/ui/button-group';
 import {CollapsibleTrigger} from '@/components/ui/collapsible';
 import {
     DropdownMenu,
@@ -29,6 +30,7 @@ import {ProjectGitConfigurationKeys} from '@/ee/shared/mutations/automation/proj
 import {useToast} from '@/hooks/use-toast';
 import ProjectGitConfigurationDialog from '@/pages/automation/project/components/ProjectGitConfigurationDialog';
 import {ProjectShareDialog} from '@/pages/automation/project/components/ProjectShareDialog';
+import handleImportWorkflow from '@/pages/automation/project/utils/handleImportWorkflow';
 import ProjectPublishDialog from '@/pages/automation/projects/components/ProjectPublishDialog';
 import WorkflowDialog from '@/shared/components/workflow/WorkflowDialog';
 import EEVersion from '@/shared/edition/EEVersion';
@@ -60,7 +62,7 @@ import {
     UploadIcon,
     WorkflowIcon,
 } from 'lucide-react';
-import {ChangeEvent, useCallback, useRef, useState} from 'react';
+import {useCallback, useRef, useState} from 'react';
 import {Link, useNavigate, useSearchParams} from 'react-router-dom';
 
 import TagList from '../../../../../shared/components/TagList';
@@ -166,28 +168,6 @@ const ProjectListItem = ({project, projectGitConfiguration, remainingTags}: Proj
         },
     });
 
-    const handleImportProjectWorkflowClick = (definition: string) => {
-        importProjectWorkflowMutation.mutate({
-            id: project.id!,
-            workflow: {
-                definition,
-            },
-        });
-    };
-
-    const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files) {
-            const file = event.target.files[0];
-
-            /* eslint-disable @typescript-eslint/no-explicit-any */
-            const definition = await (typeof (file as any).text === 'function'
-                ? (file as Blob).text()
-                : new Response(file).text());
-
-            handleImportProjectWorkflowClick(definition);
-        }
-    };
-
     const handleUpdateProjectGitConfigurationSubmit = ({
         onSuccess,
         projectGitConfiguration,
@@ -288,35 +268,54 @@ const ProjectListItem = ({project, projectGitConfiguration, remainingTags}: Proj
                                     <ChevronDownIcon className="size-4 duration-300 group-data-[state=open]:rotate-180" />
                                 </CollapsibleTrigger>
 
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button size="xs" variant="outline">
-                                            New workflow
-                                        </Button>
-                                    </DropdownMenuTrigger>
+                                <ButtonGroup>
+                                    <Button
+                                        onClick={(event) => {
+                                            event.stopPropagation();
 
-                                    <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onClick={() => setShowWorkflowDialog(true)}>
-                                            <PlusIcon /> From Scratch
-                                        </DropdownMenuItem>
+                                            setShowWorkflowDialog(true);
+                                        }}
+                                        size="xs"
+                                        variant="outline"
+                                    >
+                                        <PlusIcon />
+                                        Workflow
+                                    </Button>
 
-                                        {ff_1041 && (
-                                            <DropdownMenuItem onClick={() => navigate(`./${project.id}/templates`)}>
-                                                <LayoutTemplateIcon /> From Template
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button size="xs" variant="outline">
+                                                <ChevronDownIcon />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+
+                                        <DropdownMenuContent align="end">
+                                            {ff_1041 && (
+                                                <DropdownMenuItem
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+
+                                                        navigate(`./${project.id}/templates`);
+                                                    }}
+                                                >
+                                                    <LayoutTemplateIcon /> From Template
+                                                </DropdownMenuItem>
+                                            )}
+
+                                            <DropdownMenuItem
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+
+                                                    if (hiddenFileInputRef.current) {
+                                                        hiddenFileInputRef.current.click();
+                                                    }
+                                                }}
+                                            >
+                                                <UploadIcon /> Import Workflow
                                             </DropdownMenuItem>
-                                        )}
-
-                                        <DropdownMenuItem
-                                            onClick={() => {
-                                                if (hiddenFileInputRef.current) {
-                                                    hiddenFileInputRef.current.click();
-                                                }
-                                            }}
-                                        >
-                                            <UploadIcon /> Import Workflow
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </ButtonGroup>
 
                                 <div onClick={(event) => event.stopPropagation()}>
                                     {project.tags && (
@@ -343,7 +342,7 @@ const ProjectListItem = ({project, projectGitConfiguration, remainingTags}: Proj
                             <div className="flex items-center space-x-2">
                                 {project.lastPublishedDate && project.lastProjectVersion ? (
                                     <>
-                                        <Badge className="flex space-x-1" variant="success">
+                                        <Badge className="flex space-x-1" styleType="success-outline" weight="semibold">
                                             <span>V{project.lastProjectVersion - 1}</span>
 
                                             <span>PUBLISHED</span>
@@ -366,7 +365,7 @@ const ProjectListItem = ({project, projectGitConfiguration, remainingTags}: Proj
                                         {/*/>*/}
                                     </>
                                 ) : (
-                                    <Badge className="flex space-x-1" variant="secondary">
+                                    <Badge className="flex space-x-1" styleType="secondary-filled" weight="semibold">
                                         <span>V{project.lastProjectVersion}</span>
 
                                         <span>{project.lastStatus}</span>
@@ -569,7 +568,7 @@ const ProjectListItem = ({project, projectGitConfiguration, remainingTags}: Proj
                 accept=".json,.yaml,.yml"
                 alt="file"
                 className="hidden"
-                onChange={handleFileChange}
+                onChange={(event) => handleImportWorkflow(event, project.id!, importProjectWorkflowMutation)}
                 ref={hiddenFileInputRef}
                 type="file"
             />

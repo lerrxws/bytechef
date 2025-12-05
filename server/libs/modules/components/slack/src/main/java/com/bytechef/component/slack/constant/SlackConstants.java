@@ -33,13 +33,17 @@ public class SlackConstants {
 
     public static final String CHANNEL = "channel";
     public static final String CHALLENGE = "challenge";
+    public static final String ERROR = "error";
     public static final String ID = "id";
     public static final String NAME = "name";
+    public static final String OK = "ok";
     public static final String TEXT = "text";
+    public static final String TIMESTAMP = "timestamp";
+    public static final String TYPE = "type";
 
     public static final ModifiableObjectProperty CHAT_POST_MESSAGE_RESPONSE_PROPERTY = object()
         .properties(
-            bool("ok")
+            bool(OK)
                 .description("Indicates if the message was successfully sent."),
             string(CHANNEL)
                 .description("ID of the channel the message was sent to."),
@@ -50,7 +54,7 @@ public class SlackConstants {
                 .properties(
                     string("user")
                         .description("ID of the user who sent the message."),
-                    string("type")
+                    string(TYPE)
                         .description("Type of the message."),
                     string("ts")
                         .description("Timestamp of the message."),
@@ -65,12 +69,11 @@ public class SlackConstants {
                     array("messages")
                         .items(string())));
 
-    public static final ModifiableStringProperty TEXT_PROPERTY =
-        string(TEXT)
-            .label("Message")
-            .description("The text of your message.")
-            .controlType(ControlType.TEXT_AREA)
-            .required(true);
+    public static final ModifiableStringProperty TEXT_PROPERTY = string(TEXT)
+        .label("Message")
+        .description("The text of your message.")
+        .controlType(ControlType.TEXT_AREA)
+        .required(true);
 
     private SlackConstants() {
     }

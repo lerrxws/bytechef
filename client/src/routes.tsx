@@ -31,20 +31,19 @@ import {createBrowserRouter, redirect} from 'react-router-dom';
 
 const AccountProfile = lazy(() => import('@/pages/account/settings/AccountProfile'));
 const Appearance = lazy(() => import('@/pages/account/settings/Appearance'));
-const ApiKeys = lazy(() => import('@/pages/settings/platform/api-keys/ApiKeys'));
 const AutomationWorkflowExecutions = lazy(() =>
     import('@/pages/automation/workflow-executions/WorkflowExecutions').then((module) => ({
         default: module.WorkflowExecutions,
     }))
 );
 const Home = lazy(() => import('@/pages/home/Home'));
+const McpServer = lazy(() => import('@/pages/settings/platform/mcp-server/McpServer'));
 const McpServers = lazy(() => import('@/pages/automation/mcp-servers/McpServers'));
 const Notifications = lazy(() => import('@/pages/settings/platform/notifications/Notifications'));
 const Project = lazy(() => import('@/pages/automation/project/Project'));
 const ProjectTemplate = lazy(() => import('@/pages/automation/template/project-template/ProjectTemplate'));
 const ProjectTemplates = lazy(() => import('@/pages/automation/templates/project-templates/ProjectTemplates'));
 const Projects = lazy(() => import('@/pages/automation/projects/Projects'));
-
 const Sessions = lazy(() => import('@/pages/account/settings/Sessions'));
 const WorkflowChat = lazy(() => import('@/pages/automation/workflow-chat/WorkflowChat'));
 const WorkflowTemplate = lazy(() => import('@/pages/automation/template/workflow-template/WorkflowTemplate'));
@@ -54,7 +53,9 @@ const AiProviders = lazy(() => import('@/ee/pages/settings/platform/ai-providers
 const ApiClients = lazy(() => import('@/ee/pages/automation/api-platform/api-clients/ApiClients'));
 const ApiCollections = lazy(() => import('@/ee/pages/automation/api-platform/api-collections/ApiCollections'));
 const ApiConnectors = lazy(() => import('@/ee/pages/settings/platform/api-connectors/ApiConnectors'));
+const EmbeddedApiKeys = lazy(() => import('@/ee/pages/settings/embedded/api-keys/ApiKeys'));
 const AppEvents = lazy(() => import('@/ee/pages/embedded/app-events/AppEvents'));
+const AdminApiKeys = lazy(() => import('@/ee/pages/settings/platform/admin-api-keys/AdminApiKeys'));
 const AutomationWorkflows = lazy(() => import('@/ee/pages/embedded/automation-workflows/AutomationWorkflows'));
 const ConnectedUsers = lazy(() => import('@/ee/pages/embedded/connected-users/ConnectedUsers'));
 const CustomComponents = lazy(() => import('@/ee/pages/settings/platform/custom-components/CustomComponents'));
@@ -73,6 +74,7 @@ const IntegrationInstanceConfigurations = lazy(
 const Integration = lazy(() => import('@/ee/pages/embedded/integration/Integration'));
 const Integrations = lazy(() => import('@/ee/pages/embedded/integrations/Integrations'));
 const SigningKeys = lazy(() => import('@/ee/pages/settings/embedded/signing-keys/SigningKeys'));
+const WorkspaceApiKeys = lazy(() => import('@/ee/pages/settings/automation/workspace-api-keys/WorkspaceApiKeys'));
 const Workspaces = lazy(() => import('@/ee/pages/settings/automation/workspaces/Workspaces'));
 
 const getAccountRoutes = (path: string) => ({
@@ -145,6 +147,18 @@ const currentWorkspaceSettingsRoutes = {
             ),
             path: 'git-configuration',
         },
+        {
+            element: (
+                <PrivateRoute hasAnyAuthorities={[AUTHORITIES.ADMIN]}>
+                    <EEVersion>
+                        <LazyLoadWrapper>
+                            <WorkspaceApiKeys />
+                        </LazyLoadWrapper>
+                    </EEVersion>
+                </PrivateRoute>
+            ),
+            path: 'workspace-api-keys',
+        },
     ],
     navItems: [
         {
@@ -153,6 +167,10 @@ const currentWorkspaceSettingsRoutes = {
         {
             href: 'git-configuration',
             title: 'Git Configuration',
+        },
+        {
+            href: 'workspace-api-keys',
+            title: 'API Keys',
         },
     ],
 };
@@ -171,6 +189,16 @@ const platformSettingsRoutes = {
                 </PrivateRoute>
             ),
             path: 'ai-providers',
+        },
+        {
+            element: (
+                <PrivateRoute hasAnyAuthorities={[AUTHORITIES.ADMIN, AUTHORITIES.USER]}>
+                    <LazyLoadWrapper>
+                        <McpServer />
+                    </LazyLoadWrapper>
+                </PrivateRoute>
+            ),
+            path: 'mcp-server',
         },
         {
             element: (
@@ -200,21 +228,23 @@ const platformSettingsRoutes = {
             element: (
                 <PrivateRoute hasAnyAuthorities={[AUTHORITIES.ADMIN]}>
                     <LazyLoadWrapper>
-                        <ApiKeys />
-                    </LazyLoadWrapper>
-                </PrivateRoute>
-            ),
-            path: 'api-keys',
-        },
-        {
-            element: (
-                <PrivateRoute hasAnyAuthorities={[AUTHORITIES.ADMIN]}>
-                    <LazyLoadWrapper>
                         <Notifications />
                     </LazyLoadWrapper>
                 </PrivateRoute>
             ),
             path: 'notifications',
+        },
+        {
+            element: (
+                <PrivateRoute hasAnyAuthorities={[AUTHORITIES.ADMIN, AUTHORITIES.USER]}>
+                    <EEVersion>
+                        <LazyLoadWrapper>
+                            <AdminApiKeys />
+                        </LazyLoadWrapper>
+                    </EEVersion>
+                </PrivateRoute>
+            ),
+            path: 'admin-api-keys',
         },
     ],
     navItems: [
@@ -226,6 +256,10 @@ const platformSettingsRoutes = {
             title: 'AI Providers',
         },
         {
+            href: 'mcp-server',
+            title: 'MCP Server',
+        },
+        {
             href: 'custom-components',
             title: 'Custom Components',
         },
@@ -234,12 +268,12 @@ const platformSettingsRoutes = {
             title: 'API Connectors',
         },
         {
-            href: 'api-keys',
-            title: 'API Keys',
-        },
-        {
             href: 'notifications',
             title: 'Notifications',
+        },
+        {
+            href: 'admin-api-keys',
+            title: 'Admin API Keys',
         },
     ],
 };
@@ -538,7 +572,7 @@ export const getRouter = (queryClient: QueryClient) =>
                                             element: (
                                                 <PrivateRoute hasAnyAuthorities={[AUTHORITIES.ADMIN]}>
                                                     <EEVersion>
-                                                        <LazyLoadWrapper hasLeftSidebar>
+                                                        <LazyLoadWrapper>
                                                             <Workspaces />
                                                         </LazyLoadWrapper>
                                                     </EEVersion>
@@ -700,6 +734,18 @@ export const getRouter = (queryClient: QueryClient) =>
                                             ),
                                             path: 'signing-keys',
                                         },
+                                        {
+                                            element: (
+                                                <PrivateRoute hasAnyAuthorities={[AUTHORITIES.ADMIN]}>
+                                                    <EEVersion>
+                                                        <LazyLoadWrapper>
+                                                            <EmbeddedApiKeys />
+                                                        </LazyLoadWrapper>
+                                                    </EEVersion>
+                                                </PrivateRoute>
+                                            ),
+                                            path: 'api-keys',
+                                        },
                                         ...platformSettingsRoutes.children,
                                     ],
                                     element: (
@@ -708,6 +754,10 @@ export const getRouter = (queryClient: QueryClient) =>
                                                 {
                                                     href: '/embedded/settings/signing-keys',
                                                     title: 'Signing Keys',
+                                                },
+                                                {
+                                                    href: '/embedded/settings/api-keys',
+                                                    title: 'API Keys',
                                                 },
                                                 ...platformSettingsRoutes.navItems,
                                             ]}

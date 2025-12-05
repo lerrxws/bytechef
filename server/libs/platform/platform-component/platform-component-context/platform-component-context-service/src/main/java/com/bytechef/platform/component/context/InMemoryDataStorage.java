@@ -16,10 +16,12 @@
 
 package com.bytechef.platform.component.context;
 
+import com.bytechef.commons.util.JsonUtils;
 import com.bytechef.platform.constant.ModeType;
 import com.bytechef.platform.data.storage.DataStorage;
 import com.bytechef.platform.data.storage.domain.DataStorageScope;
 import com.bytechef.tenant.util.TenantCacheKeyUtils;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -92,9 +94,27 @@ class InMemoryDataStorage implements DataStorage {
         @NonNull String componentName, @NonNull DataStorageScope scope, @NonNull String scopeId,
         @NonNull String key, @NonNull ModeType type, @NonNull Object value) {
 
+        int size = getSizeInBytes(value);
+
+        if (size > 409600) {
+            throw new IllegalArgumentException("Value size exceeds 400KB limit per key. Actual: " + size + " bytes)");
+        }
+
         Map<String, Object> map = getValueMap(componentName, scope, scopeId, type);
 
         map.put(key, value);
+    }
+
+    private int getSizeInBytes(Object value) {
+        if (value instanceof byte[] bytes) {
+            return bytes.length;
+        }
+
+        if (value instanceof String string) {
+            return string.getBytes(StandardCharsets.UTF_8).length;
+        }
+
+        return JsonUtils.writeValueAsBytes(value).length;
     }
 
     private Map<String, Object> getValueMap(

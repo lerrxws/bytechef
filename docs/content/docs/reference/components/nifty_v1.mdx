@@ -104,7 +104,7 @@ Name: createTask
 
 |      Name       |      Label     |     Type     |     Description     | Required |
 |:---------------:|:--------------:|:------------:|:-------------------:|:--------:|
-| project | Project ID | STRING | ID of the project within which the task will be created. | true |
+| project | Project ID | STRING | ID of the project within which the task will be created. | false |
 | task_group_id | Status | STRING <details> <summary> Depends On </summary> project </details> |  | true |
 | name | Name | STRING | Name of the task. | true |
 | description | Description | STRING | Description of the task. | false |
@@ -392,7 +392,7 @@ To create a Custom Action, simply specify the desired HTTP method, path, and any
 
 # Additional Instructions
 
-## CONNECTION
+## Connection Setup
 
 <div style={{ position: 'relative', height:0, width: '100%', overflow: 'hidden', zIndex: 99999, boxSizing: 'border-box', paddingBottom: 'calc(52.05219207% + 32px)'}}>
     <iframe src="https://www.guidejar.com/embed/d345f40c-f9ff-4717-895a-0449d23bb3e1?type=1&controls=on" width="100%" height="100%" style={{height:'100%', position:'absolute', inset:0}} allowFullScreen frameBorder="0"></iframe>

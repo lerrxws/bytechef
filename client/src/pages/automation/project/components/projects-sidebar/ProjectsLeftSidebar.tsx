@@ -1,4 +1,5 @@
-import {Button} from '@/components/ui/button';
+import Button from '@/components/Button/Button';
+import {ButtonGroup} from '@/components/ui/button-group';
 import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from '@/components/ui/dropdown-menu';
 import {ScrollArea} from '@/components/ui/scroll-area';
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip';
@@ -10,6 +11,7 @@ import WorkflowsListItem from '@/pages/automation/project/components/projects-si
 import WorkflowsListSkeleton from '@/pages/automation/project/components/projects-sidebar/components/WorkflowsListSkeleton';
 import {useProjectsLeftSidebar} from '@/pages/automation/project/components/projects-sidebar/hooks/useProjectsLeftSidebar';
 import handleImportProject from '@/pages/automation/project/utils/handleImportProject';
+import handleImportWorkflow from '@/pages/automation/project/utils/handleImportWorkflow';
 import ProjectDialog from '@/pages/automation/projects/components/ProjectDialog';
 import {useWorkspaceStore} from '@/pages/automation/stores/useWorkspaceStore';
 import WorkflowDialog from '@/shared/components/workflow/WorkflowDialog';
@@ -20,8 +22,8 @@ import {ProjectKeys, useGetWorkspaceProjectsQuery} from '@/shared/queries/automa
 import {useGetWorkflowQuery} from '@/shared/queries/automation/workflows.queries';
 import {useFeatureFlagsStore} from '@/shared/stores/useFeatureFlagsStore';
 import {useQueryClient} from '@tanstack/react-query';
-import {LayoutTemplateIcon, PlusIcon, UploadIcon} from 'lucide-react';
-import {ChangeEvent, RefObject, useEffect, useMemo, useRef, useState} from 'react';
+import {ChevronDownIcon, LayoutTemplateIcon, PlusIcon, UploadIcon} from 'lucide-react';
+import {RefObject, useEffect, useMemo, useRef, useState} from 'react';
 import {ImperativePanelHandle} from 'react-resizable-panels';
 import {useNavigate} from 'react-router-dom';
 
@@ -42,6 +44,7 @@ const ProjectsLeftSidebar = ({
     const [sortBy, setSortBy] = useState('last-edited');
     const [searchValue, setSearchValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [showProjectDialog, setShowProjectDialog] = useState(false);
     const [showWorkflowDialog, setShowWorkflowDialog] = useState(false);
 
     const projectHiddenFileInputRef = useRef<HTMLInputElement>(null);
@@ -103,28 +106,6 @@ const ProjectsLeftSidebar = ({
         },
     });
 
-    const handleImportProjectWorkflowClick = (definition: string) => {
-        importProjectWorkflowMutation.mutate({
-            id: selectedProjectId,
-            workflow: {
-                definition,
-            },
-        });
-    };
-
-    const handleImportWorkflow = async (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const file = e.target.files[0];
-
-            /* eslint-disable @typescript-eslint/no-explicit-any */
-            const definition = await (typeof (file as any).text === 'function'
-                ? (file as Blob).text()
-                : new Response(file).text());
-
-            handleImportProjectWorkflowClick(definition);
-        }
-    };
-
     useEffect(() => {
         setIsLoading(projectWorkflowsLoading || allProjectsWorkflowsLoading);
     }, [projectWorkflowsLoading, allProjectsWorkflowsLoading]);
@@ -164,11 +145,11 @@ const ProjectsLeftSidebar = ({
                                         <TooltipTrigger asChild>
                                             <Button
                                                 aria-label="New project"
-                                                className="h-auto border-stroke-neutral-secondary p-2 shadow-none hover:bg-surface-neutral-primary-hover data-[state=open]:border-stroke-brand-secondary data-[state=open]:bg-surface-brand-secondary data-[state=open]:text-content-brand-primary"
+                                                className="data-[state=open]:border-stroke-brand-secondary data-[state=open]:bg-surface-brand-secondary data-[state=open]:text-content-brand-primary"
+                                                icon={<PlusIcon />}
+                                                size="icon"
                                                 variant="outline"
-                                            >
-                                                <PlusIcon />
-                                            </Button>
+                                            />
                                         </TooltipTrigger>
                                     </DropdownMenuTrigger>
 
@@ -176,24 +157,28 @@ const ProjectsLeftSidebar = ({
                                 </Tooltip>
 
                                 <DropdownMenuContent align="end">
-                                    <ProjectDialog
-                                        project={undefined}
-                                        triggerNode={
-                                            <DropdownMenuItem onSelect={(event) => event.preventDefault()}>
-                                                <PlusIcon className="mr-2 size-4" />
-                                                From Scratch
-                                            </DropdownMenuItem>
-                                        }
-                                    />
+                                    <DropdownMenuItem
+                                        className="cursor-pointer"
+                                        onClick={() => setShowProjectDialog(true)}
+                                    >
+                                        <PlusIcon className="mr-2 size-4" />
+                                        From Scratch
+                                    </DropdownMenuItem>
 
                                     {ff_1041 && (
-                                        <DropdownMenuItem onClick={() => navigate(`templates`)}>
+                                        <DropdownMenuItem
+                                            className="cursor-pointer"
+                                            onClick={() => navigate(`templates`)}
+                                        >
                                             <LayoutTemplateIcon className="mr-2 size-4" />
                                             From Template
                                         </DropdownMenuItem>
                                     )}
 
-                                    <DropdownMenuItem onClick={() => projectHiddenFileInputRef.current?.click()}>
+                                    <DropdownMenuItem
+                                        className="cursor-pointer"
+                                        onClick={() => projectHiddenFileInputRef.current?.click()}
+                                    >
                                         <UploadIcon className="mr-2 size-4" />
                                         Import Project
                                     </DropdownMenuItem>
@@ -205,11 +190,11 @@ const ProjectsLeftSidebar = ({
                                 triggerNode={
                                     <Button
                                         aria-label="New project"
-                                        className="h-auto border-stroke-neutral-secondary p-2 shadow-none hover:bg-surface-neutral-primary-hover data-[state=open]:border-stroke-brand-secondary data-[state=open]:bg-surface-brand-secondary data-[state=open]:text-content-brand-primary"
+                                        className="data-[state=open]:border-stroke-brand-secondary data-[state=open]:bg-surface-brand-secondary data-[state=open]:text-content-brand-primary"
+                                        icon={<PlusIcon />}
+                                        size="icon"
                                         variant="outline"
-                                    >
-                                        <PlusIcon />
-                                    </Button>
+                                    />
                                 }
                             />
                         )}
@@ -224,43 +209,48 @@ const ProjectsLeftSidebar = ({
                     sortBy={sortBy}
                 />
 
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            className="w-full bg-surface-neutral-secondary py-2 hover:bg-background [&_svg]:size-5"
-                            size="icon"
-                            variant="ghost"
-                        >
-                            <div className="flex items-center justify-center gap-2">
-                                <PlusIcon />
+                <ButtonGroup className="w-full">
+                    <Button
+                        className="w-full [&_svg]:size-5"
+                        icon={<PlusIcon />}
+                        label="Workflow"
+                        onClick={() => setShowWorkflowDialog(true)}
+                        variant="secondary"
+                    />
 
-                                <span>New workflow</span>
-                            </div>
-                        </Button>
-                    </DropdownMenuTrigger>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                className="data-[state=open]:border-stroke-brand-secondary data-[state=open]:bg-surface-brand-secondary data-[state=open]:text-content-brand-primary [&_svg]:size-5"
+                                icon={<ChevronDownIcon />}
+                                size="icon"
+                                variant="secondary"
+                            />
+                        </DropdownMenuTrigger>
 
-                    <DropdownMenuContent align="center" className="w-80">
-                        <DropdownMenuItem onClick={() => setShowWorkflowDialog(true)}>
-                            <PlusIcon /> From Scratch
-                        </DropdownMenuItem>
+                        <DropdownMenuContent align="end">
+                            {ff_1041 && (
+                                <DropdownMenuItem
+                                    className="cursor-pointer"
+                                    onClick={() => navigate(`./../../../${selectedProjectId}/templates`)}
+                                >
+                                    <LayoutTemplateIcon /> From Template
+                                </DropdownMenuItem>
+                            )}
 
-                        {ff_1041 && (
-                            <DropdownMenuItem onClick={() => navigate(`./../../../${selectedProjectId}/templates`)}>
-                                <LayoutTemplateIcon /> From Template
+                            <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={() => {
+                                    if (workflowHiddenFileInputRef.current) {
+                                        workflowHiddenFileInputRef.current.click();
+                                    }
+                                }}
+                            >
+                                <UploadIcon /> Import Workflow
                             </DropdownMenuItem>
-                        )}
-
-                        <DropdownMenuItem
-                            onClick={() => {
-                                if (workflowHiddenFileInputRef.current) {
-                                    workflowHiddenFileInputRef.current.click();
-                                }
-                            }}
-                        >
-                            <UploadIcon /> Import Workflow
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </ButtonGroup>
             </div>
 
             <ScrollArea className="mb-3 h-screen w-full overflow-y-auto px-4">
@@ -283,7 +273,7 @@ const ProjectsLeftSidebar = ({
                                     />
                                 ))
                             ) : (
-                                <span className="text-sm text-muted-foreground">Now workflows found</span>
+                                <span className="text-sm text-muted-foreground">No workflows found</span>
                             ))}
 
                         {selectedProjectId !== 0 && filteredWorkflowsList.length > 0 ? (
@@ -299,11 +289,13 @@ const ProjectsLeftSidebar = ({
                                 />
                             ))
                         ) : (
-                            <span className="text-sm text-muted-foreground">Now workflows found</span>
+                            <span className="text-sm text-muted-foreground">No workflows found</span>
                         )}
                     </ul>
                 )}
             </ScrollArea>
+
+            {showProjectDialog && <ProjectDialog onClose={() => setShowProjectDialog(false)} project={undefined} />}
 
             {showWorkflowDialog && (
                 <WorkflowDialog
@@ -318,7 +310,7 @@ const ProjectsLeftSidebar = ({
                 accept=".json,.yaml,.yml"
                 alt="file"
                 className="hidden"
-                onChange={handleImportWorkflow}
+                onChange={(event) => handleImportWorkflow(event, selectedProjectId, importProjectWorkflowMutation)}
                 ref={workflowHiddenFileInputRef}
                 type="file"
             />

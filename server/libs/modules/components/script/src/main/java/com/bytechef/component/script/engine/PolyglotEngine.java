@@ -23,6 +23,8 @@ import com.bytechef.commons.util.ConvertUtils;
 import com.bytechef.component.definition.ActionContext;
 import com.bytechef.component.definition.Parameters;
 import com.bytechef.platform.component.ComponentConnection;
+import com.bytechef.platform.component.context.ContextFactory;
+import com.bytechef.platform.component.definition.ActionContextAware;
 import com.bytechef.platform.component.domain.ComponentDefinition;
 import com.bytechef.platform.component.facade.ActionDefinitionFacade;
 import com.bytechef.platform.component.service.ComponentDefinitionService;
@@ -37,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Value;
@@ -56,11 +59,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class PolyglotEngine {
 
-    private final ApplicationContext applicationContext;
+    private static final ReentrantLock LOCK = new ReentrantLock();
 
-    private static final Engine engine = Engine
-        .newBuilder()
-        .build();
+    private static Engine engine;
+
+    private final ApplicationContext applicationContext;
 
     public PolyglotEngine(ApplicationContext applicationContext) {
         this.applicationContext = applicationContext;
@@ -95,10 +98,13 @@ public class PolyglotEngine {
     }
 
     /**
-     * Copy from PolyglotMap to Map and PolyglotList to List
+     * Recursively converts data structures originating from a polyglot context into Java-native objects. Handles
+     * conversions for common data structures such as maps and lists, while leaving other object types unmodified.
      *
-     * @param object
-     * @return
+     * @param object the object to be copied and converted from the polyglot context. This may be a map, list, or any
+     *               other data type.
+     * @return a Java-native representation of the input object. If the input is a map or list, it is recursively copied
+     *         and converted. Other objects are returned as is.
      */
     private static Object copyFromPolyglotContext(Object object) {
         switch (object) {
@@ -218,8 +224,25 @@ public class PolyglotEngine {
 
     private static Context getContext() {
         return Context.newBuilder()
-            .engine(engine)
+            .engine(getEngine())
             .build();
+    }
+
+    private static Engine getEngine() {
+        if (engine == null) {
+            LOCK.lock();
+
+            try {
+                if (engine == null) {
+                    engine = Engine.newBuilder()
+                        .build();
+                }
+            } finally {
+                LOCK.unlock();
+            }
+        }
+
+        return engine;
     }
 
     @SuppressWarnings("unchecked")
@@ -278,7 +301,10 @@ public class PolyglotEngine {
 
                 Object result = actionDefinitionFacade.executePerformForPolyglot(
                     componentDefinition.getName(), componentDefinition.getVersion(), actionName,
-                    (Map) copyFromPolyglotContext(inputParameters), componentConnection, actionContext);
+                    (Map) copyFromPolyglotContext(inputParameters), componentConnection,
+                    createActionContext(
+                        componentDefinition.getName(), componentDefinition.getVersion(),
+                        actionName, actionContext, componentConnection));
 
                 if (result == null) {
                     return null;
@@ -286,6 +312,21 @@ public class PolyglotEngine {
 
                 return copyToGuestValue(result, languageId);
             };
+        }
+
+        private ActionContext createActionContext(
+            String componentName, int componentVersion, String actionName, ActionContext actionContext,
+            ComponentConnection componentConnection) {
+
+            ContextFactory contextFactory = applicationContext.getBean(ContextFactory.class);
+
+            ActionContextAware actionContextAware = (ActionContextAware) actionContext;
+
+            return contextFactory.createActionContext(
+                componentName, componentVersion, actionName, actionContextAware.getJobPrincipalId(),
+                actionContextAware.getJobPrincipalWorkflowId(), actionContextAware.getJobId(),
+                actionContextAware.getWorkflowId(), componentConnection,
+                actionContextAware.getModeType(), true);
         }
 
         @Override

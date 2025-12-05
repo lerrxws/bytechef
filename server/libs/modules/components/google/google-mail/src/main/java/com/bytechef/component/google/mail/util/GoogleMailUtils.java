@@ -26,6 +26,7 @@ import static com.bytechef.component.definition.ComponentDsl.string;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.ATTACHMENTS;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.BCC;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.BODY;
+import static com.bytechef.component.google.mail.constant.GoogleMailConstants.BODY_TYPE;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.CC;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.FORMAT;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.FROM;
@@ -62,13 +63,10 @@ import com.bytechef.definition.BaseOutputDefinition.OutputResponse;
 import com.bytechef.google.commons.GoogleServices;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.Label;
-import com.google.api.services.gmail.model.ListMessagesResponse;
-import com.google.api.services.gmail.model.ListThreadsResponse;
 import com.google.api.services.gmail.model.Message;
 import com.google.api.services.gmail.model.MessagePart;
 import com.google.api.services.gmail.model.MessagePartBody;
 import com.google.api.services.gmail.model.MessagePartHeader;
-import com.google.api.services.gmail.model.Thread;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.activation.DataHandler;
 import jakarta.mail.MessagingException;
@@ -208,15 +206,17 @@ public class GoogleMailUtils {
 
         MimeBodyPart mimeBodyPart = new MimeBodyPart();
 
-        mimeBodyPart.setContent(inputParameters.getRequiredString(BODY), "text/plain");
+        mimeBodyPart.setText(
+            inputParameters.getRequiredString(BODY), StandardCharsets.UTF_8.name(),
+            inputParameters.getRequiredString(BODY_TYPE));
 
         Multipart multipart = new MimeMultipart();
 
         multipart.addBodyPart(mimeBodyPart);
 
-        MimeBodyPart attachmentBodyPart = new MimeBodyPart();
-
         for (FileEntry fileEntry : inputParameters.getFileEntries(ATTACHMENTS, List.of())) {
+            MimeBodyPart attachmentBodyPart = new MimeBodyPart();
+
             attachmentBodyPart.setDataHandler(
                 new DataHandler(
                     new ByteArrayDataSource(
@@ -250,7 +250,6 @@ public class GoogleMailUtils {
             jakarta.mail.Message.RecipientType.TO,
             InternetAddress.parse(String.join(",", inputParameters.getRequiredList(TO, String.class))));
 
-        mimeMessage.setText(inputParameters.getRequiredString(BODY));
         mimeMessage.setRecipients(
             jakarta.mail.Message.RecipientType.CC,
             InternetAddress.parse(String.join(",", inputParameters.getList(CC, String.class, List.of()))));
@@ -262,7 +261,7 @@ public class GoogleMailUtils {
             InternetAddress.parse(String.join(",", inputParameters.getList(REPLY_TO, String.class, List.of()))));
 
         if (messageToReply == null) {
-            mimeMessage.setSubject(inputParameters.getRequiredString(SUBJECT));
+            mimeMessage.setSubject(inputParameters.getRequiredString(SUBJECT), StandardCharsets.UTF_8.name());
         } else {
             MessagePart payload = messageToReply.getPayload();
 
@@ -280,10 +279,9 @@ public class GoogleMailUtils {
                 }
             }
 
-            mimeMessage.setSubject(subject);
+            mimeMessage.setSubject(subject, StandardCharsets.UTF_8.name());
             mimeMessage.setHeader("In-Reply-To", messageID);
             mimeMessage.setHeader("References", messageID);
-            mimeMessage.setHeader("Subject", subject);
         }
 
         return mimeMessage;
@@ -327,44 +325,6 @@ public class GoogleMailUtils {
         } catch (IOException e) {
             throw translateGoogleIOException(e);
         }
-    }
-
-    public static List<Option<String>> getMessageIdOptions(
-        Parameters inputParameters, Parameters connectionParameters, Map<String, String> lookupDependsOnPaths,
-        String searchText, ActionContext context) {
-
-        List<Option<String>> options = new ArrayList<>();
-
-        Gmail gmail = GoogleServices.getMail(connectionParameters);
-
-        List<Message> messages = new ArrayList<>();
-        String nextPageToken = null;
-
-        do {
-            ListMessagesResponse listMessagesResponse = null;
-            try {
-                listMessagesResponse = gmail.users()
-                    .messages()
-                    .list(ME)
-                    .setMaxResults(500L)
-                    .setPageToken(nextPageToken)
-                    .execute();
-            } catch (IOException e) {
-                throw translateGoogleIOException(e);
-            }
-
-            messages.addAll(listMessagesResponse.getMessages());
-
-            nextPageToken = listMessagesResponse.getNextPageToken();
-        } while (nextPageToken != null && messages.size() < 500);
-
-        for (Message message : messages) {
-            String id = message.getId();
-
-            options.add(option(id, id));
-        }
-
-        return options;
     }
 
     public static OutputResponse getMessageOutput(
@@ -468,7 +428,7 @@ public class GoogleMailUtils {
 
         return new SimpleMessage(
             message.getId(), message.getThreadId(), message.getHistoryId(), subject, from, to, cc, bcc, bodyPlain,
-            bodyHtml, fileEntries);
+            bodyHtml, fileEntries, "https://mail.google.com/mail/u/0/#all/" + message.getId());
     }
 
     private static List<FileEntry> getFileEntries(Message message, Context context, Gmail service) {
@@ -517,47 +477,9 @@ public class GoogleMailUtils {
         }
     }
 
-    public static List<Option<String>> getThreadIdOptions(
-        Parameters inputParameters, Parameters connectionParameters, Map<String, String> lookupDependsOnPaths,
-        String searchText, ActionContext context) {
-
-        Gmail gmail = GoogleServices.getMail(connectionParameters);
-
-        List<Thread> threads = new ArrayList<>();
-
-        String nextPageToken = null;
-        do {
-            ListThreadsResponse listThreadsResponse = null;
-            try {
-                listThreadsResponse = gmail
-                    .users()
-                    .threads()
-                    .list(ME)
-                    .setMaxResults(500L)
-                    .setPageToken(nextPageToken)
-                    .execute();
-            } catch (IOException e) {
-                throw translateGoogleIOException(e);
-            }
-
-            threads.addAll(listThreadsResponse.getThreads());
-
-            nextPageToken = listThreadsResponse.getNextPageToken();
-        } while (nextPageToken != null);
-
-        List<Option<String>> options = new ArrayList<>();
-
-        for (Thread thread : threads) {
-            options.add(option(thread.getId(), thread.getId()));
-        }
-
-        return options;
-    }
-
     public static Message sendMail(Gmail service, Message message) {
         try {
-            return service
-                .users()
+            return service.users()
                 .messages()
                 .send(ME, message)
                 .execute();
@@ -570,6 +492,6 @@ public class GoogleMailUtils {
     public record SimpleMessage(
         String id, String threadId, BigInteger historyId, String subject, String from, List<String> to,
         List<String> cc, List<String> bcc, String bodyPlain, String bodyHtml,
-        List<FileEntry> attachments) {
+        List<FileEntry> attachments, String webLink) {
     }
 }

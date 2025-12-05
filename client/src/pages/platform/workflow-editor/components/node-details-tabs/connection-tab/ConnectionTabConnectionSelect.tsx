@@ -1,5 +1,5 @@
+import Button from '@/components/Button/Button';
 import RequiredMark from '@/components/RequiredMark';
-import {Button} from '@/components/ui/button';
 import {Label} from '@/components/ui/label';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
 import {ConnectionI, useWorkflowEditor} from '@/pages/platform/workflow-editor/providers/workflowEditorProvider';
@@ -21,7 +21,6 @@ import {useEnvironmentStore} from '@/shared/stores/useEnvironmentStore';
 import {useQueryClient} from '@tanstack/react-query';
 import {PlusIcon} from 'lucide-react';
 import {useCallback, useEffect, useState} from 'react';
-import {twMerge} from 'tailwind-merge';
 import {useShallow} from 'zustand/react/shallow';
 
 import useWorkflowEditorStore from '../../../stores/useWorkflowEditorStore';
@@ -190,25 +189,33 @@ const ConnectionTabConnectionSelect = ({
                     required={required}
                     value={connectionId ? connectionId.toString() : undefined}
                 >
-                    <div className="flex space-x-2">
+                    <div className="flex space-x-2 bg-white">
                         {componentConnections && componentConnections.length > 0 && (
                             <SelectTrigger>
                                 <SelectValue placeholder="Choose Connection..." />
                             </SelectTrigger>
                         )}
 
-                        {componentDefinition && connectionDialogAllowed && (
-                            <Button
-                                className={twMerge('mt-auto p-2', !componentConnections?.length && 'w-full')}
-                                onClick={() => setShowConnectionDialog(true)}
-                                title="Create a new connection"
-                                variant="outline"
-                            >
-                                <PlusIcon className="size-5" />
-
-                                {!componentConnections?.length && 'Create Connection'}
-                            </Button>
-                        )}
+                        {componentDefinition &&
+                            connectionDialogAllowed &&
+                            (componentConnections?.length ? (
+                                <Button
+                                    icon={<PlusIcon />}
+                                    onClick={() => setShowConnectionDialog(true)}
+                                    size="icon"
+                                    title="Create a new connection"
+                                    variant="outline"
+                                />
+                            ) : (
+                                <Button
+                                    className="w-full"
+                                    icon={<PlusIcon />}
+                                    label="Create Connection"
+                                    onClick={() => setShowConnectionDialog(true)}
+                                    title="Create a new connection"
+                                    variant="outline"
+                                />
+                            ))}
 
                         {!connectionDialogAllowed && !componentConnections?.length && <p>No connections available.</p>}
                     </div>

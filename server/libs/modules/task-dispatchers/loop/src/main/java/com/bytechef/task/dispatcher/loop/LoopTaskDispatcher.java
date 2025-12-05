@@ -26,6 +26,7 @@ import static com.bytechef.task.dispatcher.loop.constant.LoopTaskDispatcherConst
 import com.bytechef.atlas.configuration.domain.Task;
 import com.bytechef.atlas.configuration.domain.WorkflowTask;
 import com.bytechef.atlas.coordinator.event.TaskExecutionCompleteEvent;
+import com.bytechef.atlas.coordinator.task.dispatcher.ErrorHandlingTaskDispatcher;
 import com.bytechef.atlas.coordinator.task.dispatcher.TaskDispatcher;
 import com.bytechef.atlas.coordinator.task.dispatcher.TaskDispatcherResolver;
 import com.bytechef.atlas.execution.domain.Context;
@@ -35,6 +36,7 @@ import com.bytechef.atlas.execution.service.TaskExecutionService;
 import com.bytechef.atlas.file.storage.TaskFileStorage;
 import com.bytechef.commons.util.MapUtils;
 import com.bytechef.evaluator.Evaluator;
+import com.fasterxml.jackson.core.type.TypeReference;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Instant;
 import java.util.Collections;
@@ -52,7 +54,7 @@ import org.springframework.context.ApplicationEventPublisher;
  * @author Ivica Cardic
  * @author Igor Beslic
  */
-public class LoopTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDispatcherResolver {
+public class LoopTaskDispatcher extends ErrorHandlingTaskDispatcher implements TaskDispatcherResolver {
 
     private final ContextService contextService;
     private final Evaluator evaluator;
@@ -67,6 +69,8 @@ public class LoopTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDi
         TaskDispatcher<? super Task> taskDispatcher, TaskExecutionService taskExecutionService,
         TaskFileStorage taskFileStorage) {
 
+        super(eventPublisher);
+
         this.contextService = contextService;
         this.evaluator = evaluator;
         this.eventPublisher = eventPublisher;
@@ -76,10 +80,14 @@ public class LoopTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDi
     }
 
     @Override
-    public void dispatch(TaskExecution taskExecution) {
+    public void doDispatch(TaskExecution taskExecution) {
         boolean loopForever = MapUtils.getBoolean(taskExecution.getParameters(), LOOP_FOREVER, false);
-        List<WorkflowTask> iterateeWorkflowTasks = MapUtils.getRequiredList(
-            taskExecution.getParameters(), ITERATEE, WorkflowTask.class);
+        List<WorkflowTask> iterateeWorkflowTasks = MapUtils
+            .getList(
+                taskExecution.getParameters(), ITERATEE, new TypeReference<Map<String, ?>>() {}, List.of())
+            .stream()
+            .map(WorkflowTask::new)
+            .toList();
         List<?> items = MapUtils.getList(taskExecution.getParameters(), ITEMS, Collections.emptyList());
 
         taskExecution.setStartDate(Instant.now());
@@ -118,7 +126,8 @@ public class LoopTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDi
             contextService.push(
                 Validate.notNull(subTaskExecution.getId(), "id"), Context.Classname.TASK_EXECUTION,
                 taskFileStorage.storeContextValue(
-                    Validate.notNull(subTaskExecution.getId(), "id"), Context.Classname.TASK_EXECUTION, newContext));
+                    Validate.notNull(subTaskExecution.getId(), "id"), Context.Classname.TASK_EXECUTION,
+                    newContext));
 
             taskDispatcher.dispatch(subTaskExecution);
         } else {
@@ -128,6 +137,7 @@ public class LoopTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDi
 
             eventPublisher.publishEvent(new TaskExecutionCompleteEvent(taskExecution));
         }
+
     }
 
     @Override

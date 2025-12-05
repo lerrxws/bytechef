@@ -18,16 +18,23 @@ package com.bytechef.component.google.mail.util;
 
 import static com.bytechef.component.definition.Authorization.ACCESS_TOKEN;
 import static com.bytechef.component.definition.ComponentDsl.option;
+import static com.bytechef.component.google.mail.constant.GoogleMailConstants.BODY;
+import static com.bytechef.component.google.mail.constant.GoogleMailConstants.BODY_TYPE;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.FORMAT;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.FULL_MESSAGE_OUTPUT_PROPERTY;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.ID;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.ME;
 import static com.bytechef.component.google.mail.constant.GoogleMailConstants.METADATA_HEADERS;
+import static com.bytechef.component.google.mail.constant.GoogleMailConstants.SUBJECT;
+import static com.bytechef.component.google.mail.constant.GoogleMailConstants.TO;
 import static com.bytechef.component.google.mail.util.GoogleMailUtils.METADATA_MESSAGE_OUTPUT_PROPERTY;
 import static com.bytechef.component.google.mail.util.GoogleMailUtils.MINIMAL_MESSAGE_OUTPUT_PROPERTY;
 import static com.bytechef.component.google.mail.util.GoogleMailUtils.RAW_MESSAGE_OUTPUT_PROPERTY;
 import static com.bytechef.component.google.mail.util.GoogleMailUtils.SIMPLE_MESSAGE_OUTPUT_PROPERTY;
+import static java.util.Base64.getUrlDecoder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -43,18 +50,20 @@ import com.bytechef.google.commons.GoogleServices;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.Label;
 import com.google.api.services.gmail.model.ListLabelsResponse;
-import com.google.api.services.gmail.model.ListMessagesResponse;
-import com.google.api.services.gmail.model.ListThreadsResponse;
 import com.google.api.services.gmail.model.Message;
 import com.google.api.services.gmail.model.MessagePart;
 import com.google.api.services.gmail.model.MessagePartBody;
 import com.google.api.services.gmail.model.MessagePartHeader;
-import com.google.api.services.gmail.model.Thread;
+import jakarta.mail.BodyPart;
+import jakarta.mail.Session;
+import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
@@ -64,16 +73,12 @@ import org.mockito.MockedStatic;
  */
 class GoogleMailUtilsTest {
 
-    private final ArgumentCaptor<Long> longArgumentCaptor = ArgumentCaptor.forClass(Long.class);
     private final ArgumentCaptor<Message> messageArgumentCaptor = ArgumentCaptor.forClass(Message.class);
     private final ActionContext mockedActionContext = mock(ActionContext.class);
     private final Gmail mockedGmail = mock(Gmail.class);
     private final Gmail.Users.Labels mockedLabels = mock(Gmail.Users.Labels.class);
     private final Gmail.Users.Labels.List mockedLabelsList = mock(Gmail.Users.Labels.List.class);
-    private final Gmail.Users.Messages.List mockedMesagesList = mock(Gmail.Users.Messages.List.class);
     private Parameters parameters;
-    private final Gmail.Users.Threads mockedThreads = mock(Gmail.Users.Threads.class);
-    private final Gmail.Users.Threads.List mockedThreadsList = mock(Gmail.Users.Threads.List.class);
     private final Gmail.Users mockedUsers = mock(Gmail.Users.class);
     private final ArgumentCaptor<String> stringArgumentCaptor = ArgumentCaptor.forClass(String.class);
     private final ArgumentCaptor<List> listArgumentCaptor = ArgumentCaptor.forClass(List.class);
@@ -145,48 +150,7 @@ class GoogleMailUtilsTest {
     }
 
     @Test
-    void testGetMessageIdOptions() throws IOException {
-        parameters = MockParametersFactory.create(Map.of(ACCESS_TOKEN, "id"));
-
-        List<Message> messages = List.of(new Message().setId("id1"), new Message().setId("id2"));
-
-        try (MockedStatic<GoogleServices> googleServicesMockedStatic = mockStatic(GoogleServices.class)) {
-            googleServicesMockedStatic
-                .when(() -> GoogleServices.getMail(parametersArgumentCaptor.capture()))
-                .thenReturn(mockedGmail);
-            when(mockedGmail.users())
-                .thenReturn(mockedUsers);
-            when(mockedUsers.messages())
-                .thenReturn(mockedMessages);
-            when(mockedMessages.list(stringArgumentCaptor.capture()))
-                .thenReturn(mockedMesagesList);
-            when(mockedMesagesList.setMaxResults(longArgumentCaptor.capture()))
-                .thenReturn(mockedMesagesList);
-            when(mockedMesagesList.setPageToken(stringArgumentCaptor.capture()))
-                .thenReturn(mockedMesagesList);
-            when(mockedMesagesList.execute())
-                .thenReturn(new ListMessagesResponse().setMessages(messages));
-
-            List<Option<String>> messageIdOptions = GoogleMailUtils.getMessageIdOptions(
-                parameters, parameters, Map.of(), anyString(), mockedActionContext);
-
-            List<Option<String>> expectedOptions = List.of(option("id1", "id1"), option("id2", "id2"));
-
-            assertEquals(expectedOptions, messageIdOptions);
-            assertEquals(parameters, parametersArgumentCaptor.getValue());
-
-            List<String> strings = new ArrayList<>();
-
-            strings.add(ME);
-            strings.add(null);
-
-            assertEquals(strings, stringArgumentCaptor.getAllValues());
-            assertEquals(500L, longArgumentCaptor.getValue());
-        }
-    }
-
-    @Test
-    void testGetSimpleMessage() throws IOException {
+    void testGetSimpleMessage() {
         Message message = new Message()
             .setId("id")
             .setThreadId("threadId")
@@ -205,48 +169,9 @@ class GoogleMailUtilsTest {
         GoogleMailUtils.SimpleMessage expectedSimpleMessage =
             new GoogleMailUtils.SimpleMessage("id", "threadId", new BigInteger("123"),
                 "email subject", null, List.of(), List.of(), List.of(), "email body", "",
-                List.of());
+                List.of(), "https://mail.google.com/mail/u/0/#all/id");
 
         assertEquals(expectedSimpleMessage, result);
-    }
-
-    @Test
-    void testGetThreadIdOptions() throws IOException {
-        parameters = MockParametersFactory.create(Map.of(ACCESS_TOKEN, "id"));
-
-        List<Thread> threads = List.of(new Thread().setId("id1"), new Thread().setId("id2"));
-        try (MockedStatic<GoogleServices> googleServicesMockedStatic = mockStatic(GoogleServices.class)) {
-            googleServicesMockedStatic
-                .when(() -> GoogleServices.getMail(parametersArgumentCaptor.capture()))
-                .thenReturn(mockedGmail);
-            when(mockedGmail.users())
-                .thenReturn(mockedUsers);
-            when(mockedUsers.threads())
-                .thenReturn(mockedThreads);
-            when(mockedThreads.list(stringArgumentCaptor.capture()))
-                .thenReturn(mockedThreadsList);
-            when(mockedThreadsList.setMaxResults(longArgumentCaptor.capture()))
-                .thenReturn(mockedThreadsList);
-            when(mockedThreadsList.setPageToken(stringArgumentCaptor.capture()))
-                .thenReturn(mockedThreadsList);
-            when(mockedThreadsList.execute())
-                .thenReturn(new ListThreadsResponse().setThreads(threads));
-
-            List<Option<String>> threadIdOptions = GoogleMailUtils.getThreadIdOptions(
-                parameters, parameters, Map.of(), anyString(), mockedActionContext);
-
-            List<Option<String>> expectedOptions = List.of(option("id1", "id1"), option("id2", "id2"));
-
-            assertEquals(expectedOptions, threadIdOptions);
-            assertEquals(parameters, parametersArgumentCaptor.getValue());
-            List<String> strings = new ArrayList<>();
-
-            strings.add(ME);
-            strings.add(null);
-
-            assertEquals(strings, stringArgumentCaptor.getAllValues());
-            assertEquals(500L, longArgumentCaptor.getValue());
-        }
     }
 
     @Test
@@ -299,5 +224,78 @@ class GoogleMailUtilsTest {
 
         assertEquals(mockedMessage, result);
         assertEquals(ME, stringArgumentCaptor.getValue());
+    }
+
+    @Test
+    void testGetEncodedEmailWithoutReplyAndAttachments() throws Exception {
+        String croatianText = "Pozdrav - šđ!";
+        String body = "Mail s hrvatskim slovima: š, č, ć, đ, Ž.";
+
+        Parameters mockedParameters = MockParametersFactory.create(
+            Map.of(TO, List.of("to@example.com"), SUBJECT, croatianText, BODY, body, BODY_TYPE, "plain"));
+
+        String encodedEmail = GoogleMailUtils.getEncodedEmail(mockedParameters, mockedActionContext, null);
+
+        byte[] raw = getUrlDecoder().decode(encodedEmail);
+
+        MimeMessage mimeMessage = new MimeMessage(
+            Session.getDefaultInstance(new Properties()), new ByteArrayInputStream(raw));
+
+        assertEquals(croatianText, mimeMessage.getSubject());
+
+        Object content = mimeMessage.getContent();
+
+        if (!(content instanceof MimeMultipart mimeMultipart)) {
+            throw new AssertionError("Expected MimeMultipart content but was: " + content);
+        }
+
+        BodyPart bodyPart = mimeMultipart.getBodyPart(0);
+
+        String partContentType = bodyPart.getContentType();
+
+        assertNotNull(partContentType);
+
+        String upperCT = partContentType.toUpperCase();
+
+        assertTrue(upperCT.contains("UTF-8"), "Content-Type should include UTF-8 but was: " + partContentType);
+        assertEquals(body, bodyPart.getContent());
+    }
+
+    @Test
+    void testGetEncodedEmailWithReplyMessageNoAttachments() throws Exception {
+        String replyMessageId = "<message-id-123@example.com>";
+        String originalSubject = "Re: Tema s đ i ž";
+        String newBody = "Odgovor s dijakritičkim znakovima: čćžšđ.";
+
+        MessagePartHeader messagePartHeader = new MessagePartHeader()
+            .setName("Message-ID")
+            .setValue(replyMessageId);
+
+        MessagePartHeader messagePartHeader1 = new MessagePartHeader()
+            .setName("Subject")
+            .setValue(originalSubject);
+        MessagePart messagePart = new MessagePart()
+            .setHeaders(List.of(messagePartHeader, messagePartHeader1));
+        Message toReply = new Message().setPayload(messagePart);
+
+        Parameters mockedParameters = MockParametersFactory.create(
+            Map.of(
+                TO, List.of("to@example.com"), SUBJECT, "ignored subject when replying", BODY, newBody,
+                BODY_TYPE, "plain"));
+
+        String encodedEmail = GoogleMailUtils.getEncodedEmail(mockedParameters, mockedActionContext, toReply);
+
+        byte[] raw = getUrlDecoder().decode(encodedEmail);
+        MimeMessage parsed = new MimeMessage(
+            Session.getDefaultInstance(new Properties()), new ByteArrayInputStream(raw));
+
+        assertEquals(originalSubject, parsed.getSubject());
+        assertEquals(replyMessageId, parsed.getHeader("In-Reply-To", null));
+        assertEquals(replyMessageId, parsed.getHeader("References", null));
+
+        MimeMultipart mimeMultipart = (MimeMultipart) parsed.getContent();
+        BodyPart bodyPart = mimeMultipart.getBodyPart(0);
+
+        assertEquals(newBody, bodyPart.getContent());
     }
 }

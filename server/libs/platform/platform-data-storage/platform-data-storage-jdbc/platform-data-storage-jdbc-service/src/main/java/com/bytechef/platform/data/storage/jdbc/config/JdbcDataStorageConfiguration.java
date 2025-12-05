@@ -16,6 +16,7 @@
 
 package com.bytechef.platform.data.storage.jdbc.config;
 
+import com.bytechef.commons.util.JsonUtils;
 import com.bytechef.platform.constant.ModeType;
 import com.bytechef.platform.data.storage.DataStorage;
 import com.bytechef.platform.data.storage.annotation.ConditionalOnDataStorageProviderJdbc;
@@ -23,6 +24,7 @@ import com.bytechef.platform.data.storage.domain.DataStorageScope;
 import com.bytechef.platform.data.storage.jdbc.repository.DataStorageRepository;
 import com.bytechef.platform.data.storage.jdbc.service.JdbcDataStorageService;
 import com.bytechef.platform.data.storage.jdbc.service.JdbcDataStorageServiceImpl;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.context.annotation.Bean;
@@ -80,6 +82,13 @@ public class JdbcDataStorageConfiguration {
             @NonNull String componentName, @NonNull DataStorageScope scope, @NonNull String scopeId,
             @NonNull String key, @NonNull ModeType type, @NonNull Object value) {
 
+            int size = getSizeInBytes(value);
+
+            if (size > 409600) {
+                throw new IllegalArgumentException(
+                    "Value size exceeds 400KB limit per key. Actual: " + size + " bytes)");
+            }
+
             jdbcDataStorageService.put(componentName, scope, scopeId, key, type, value);
         }
 
@@ -89,6 +98,18 @@ public class JdbcDataStorageConfiguration {
             @NonNull String key, @NonNull ModeType type) {
 
             jdbcDataStorageService.delete(componentName, scope, scopeId, key, type);
+        }
+
+        private int getSizeInBytes(Object value) {
+            if (value instanceof byte[] bytes) {
+                return bytes.length;
+            }
+
+            if (value instanceof String string) {
+                return string.getBytes(StandardCharsets.UTF_8).length;
+            }
+
+            return JsonUtils.writeValueAsBytes(value).length;
         }
     }
 }

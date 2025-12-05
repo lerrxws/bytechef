@@ -1,4 +1,4 @@
-import {Button} from '@/components/ui/button';
+import Button from '@/components/Button/Button';
 import DataPill from '@/pages/platform/workflow-editor/components/datapills/DataPill';
 import getNestedObject from '@/pages/platform/workflow-editor/utils/getNestedObject';
 import {NodeDataType, PropertyAllType} from '@/shared/types';
@@ -96,7 +96,7 @@ const DataPillPanelBodyPropertiesItem = ({
     return (
         <Fragment key={`accordion-item-${workflowNodeName}`}>
             <AccordionTrigger
-                className="group flex w-full items-center justify-between border-border/50 bg-background p-4 group-data-[state=closed]:border-b"
+                className="group flex w-full items-center justify-between border-border/50 bg-surface-main p-4 group-data-[state=closed]:border-b"
                 key={`accordion-trigger-${workflowNodeName}`}
             >
                 <div className="flex items-center space-x-4">

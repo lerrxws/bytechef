@@ -28,6 +28,7 @@ import com.bytechef.atlas.configuration.constant.WorkflowConstants;
 import com.bytechef.atlas.configuration.domain.Task;
 import com.bytechef.atlas.configuration.domain.WorkflowTask;
 import com.bytechef.atlas.coordinator.event.TaskExecutionCompleteEvent;
+import com.bytechef.atlas.coordinator.task.dispatcher.ErrorHandlingTaskDispatcher;
 import com.bytechef.atlas.coordinator.task.dispatcher.TaskDispatcher;
 import com.bytechef.atlas.coordinator.task.dispatcher.TaskDispatcherResolver;
 import com.bytechef.atlas.execution.domain.Context.Classname;
@@ -39,6 +40,7 @@ import com.bytechef.atlas.file.storage.TaskFileStorage;
 import com.bytechef.commons.util.MapUtils;
 import com.bytechef.evaluator.Evaluator;
 import com.bytechef.task.dispatcher.map.constant.MapTaskDispatcherConstants;
+import com.fasterxml.jackson.core.type.TypeReference;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Instant;
 import java.util.HashMap;
@@ -52,7 +54,7 @@ import org.springframework.context.ApplicationEventPublisher;
  * @author Arik Cohen
  * @since Jun 4, 2017
  */
-public class MapTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDispatcherResolver {
+public class MapTaskDispatcher extends ErrorHandlingTaskDispatcher implements TaskDispatcherResolver {
 
     private final ContextService contextService;
     private final CounterService counterService;
@@ -68,6 +70,8 @@ public class MapTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDis
         ApplicationEventPublisher eventPublisher, TaskDispatcher<? super TaskExecution> taskDispatcher,
         TaskExecutionService taskExecutionService, TaskFileStorage taskFileStorage) {
 
+        super(eventPublisher);
+
         this.contextService = contextService;
         this.counterService = counterService;
         this.evaluator = evaluator;
@@ -78,10 +82,14 @@ public class MapTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDis
     }
 
     @Override
-    public void dispatch(TaskExecution taskExecution) {
+    public void doDispatch(TaskExecution taskExecution) {
         List<?> items = MapUtils.getRequiredList(taskExecution.getParameters(), ITEMS, Object.class);
-        List<WorkflowTask> iterateeWorkflowTasks = MapUtils.getRequiredList(
-            taskExecution.getParameters(), ITERATEE, WorkflowTask.class);
+        List<WorkflowTask> iterateeWorkflowTasks = MapUtils
+            .getList(
+                taskExecution.getParameters(), ITERATEE, new TypeReference<Map<String, ?>>() {}, List.of())
+            .stream()
+            .map(WorkflowTask::new)
+            .toList();
         taskExecution.setStartDate(Instant.now());
         taskExecution.setStatus(TaskExecution.Status.STARTED);
 
@@ -118,7 +126,8 @@ public class MapTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDis
                     .build();
 
                 Map<String, Object> context = new HashMap<>(
-                    taskFileStorage.readContextValue(contextService.peek(taskExecutionId, Classname.TASK_EXECUTION)));
+                    taskFileStorage
+                        .readContextValue(contextService.peek(taskExecutionId, Classname.TASK_EXECUTION)));
 
                 WorkflowTask workflowTask = taskExecution.getWorkflowTask();
 
@@ -142,6 +151,7 @@ public class MapTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDis
 
             counterService.set(Validate.notNull(taskExecution.getId(), "id"), items.size());
         }
+
     }
 
     @Override

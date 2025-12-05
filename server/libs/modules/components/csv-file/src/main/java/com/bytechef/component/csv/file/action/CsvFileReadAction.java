@@ -26,15 +26,16 @@ import com.bytechef.component.definition.ActionContext;
 import com.bytechef.component.definition.ComponentDsl.ModifiableActionDefinition;
 import com.bytechef.component.definition.Context;
 import com.bytechef.component.definition.Parameters;
-import com.fasterxml.jackson.databind.MappingIterator;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.csv.CSVRecord;
 
 /**
  * @author Ivica Cardic
@@ -49,7 +50,7 @@ public class CsvFileReadAction {
         .output()
         .perform(CsvFileReadAction::perform);
 
-    protected static List<Map<String, Object>> perform(
+    protected static List<Map<String, String>> perform(
         Parameters inputParameters, Parameters connectionParameters, ActionContext context) throws IOException {
 
         ReadConfiguration readConfiguration = CsvFileReadUtils.getReadConfiguration(inputParameters);
@@ -62,55 +63,20 @@ public class CsvFileReadAction {
         }
     }
 
-    protected static List<Map<String, Object>> read(
+    protected static List<Map<String, String>> read(
         InputStream inputStream, ReadConfiguration configuration, Context context) throws IOException {
 
-        List<Map<String, Object>> rows = new ArrayList<>();
-        int count = 0;
+        List<Map<String, String>> rows = new ArrayList<>();
 
         try (BufferedReader bufferedReader = new BufferedReader(
             new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
 
-            char enclosingCharacter = CsvFileReadUtils.getEnclosingCharacter(configuration);
+            Iterator<CSVRecord> iterator = CsvFileReadUtils.getIterator(bufferedReader, configuration);
 
-            MappingIterator<Object> iterator = CsvFileReadUtils.getIterator(bufferedReader, configuration);
+            while (iterator.hasNext()) {
+                CSVRecord csvRecord = iterator.next();
 
-            if (configuration.headerRow()) {
-                while (iterator.hasNext()) {
-                    Map<?, ?> row = (Map<?, ?>) iterator.nextValue();
-
-                    if (count >= configuration.rangeStartRow() && count < configuration.rangeEndRow()) {
-                        Map<String, Object> map = CsvFileReadUtils.getHeaderRow(
-                            configuration, row, enclosingCharacter);
-
-                        rows.add(map);
-                    } else {
-                        if (count >= configuration.rangeEndRow()) {
-                            break;
-                        }
-                    }
-
-                    count++;
-                }
-            } else {
-                while (iterator.hasNext()) {
-                    List<?> row = (List<?>) iterator.nextValue();
-
-                    context.log(log -> log.trace("row: {}", row));
-
-                    if (count >= configuration.rangeStartRow() && count < configuration.rangeEndRow()) {
-                        Map<String, Object> map = CsvFileReadUtils.getColumnRow(
-                            configuration, row, enclosingCharacter);
-
-                        rows.add(map);
-                    } else {
-                        if (count >= configuration.rangeEndRow()) {
-                            break;
-                        }
-                    }
-
-                    count++;
-                }
+                rows.add(csvRecord.toMap());
             }
         }
 

@@ -1,4 +1,4 @@
-import {Badge} from '@/components/ui/badge';
+import Badge from '@/components/Badge/Badge';
 import {Type} from '@/pages/automation/project-deployments/ProjectDeployments';
 import {Project, Tag} from '@/shared/middleware/automation/configuration';
 import {ReactNode} from 'react';
@@ -32,9 +32,7 @@ const ProjectDeploymentFilterTitle = ({
                 {searchParams.get('tagId') ? 'tag' : 'project'}:
             </span>
 
-            <Badge variant="secondary">
-                <span className="text-sm">{pageTitle ?? 'All Projects'}</span>
-            </Badge>
+            <Badge label={`${pageTitle ?? 'All Projects'}`} styleType="secondary-filled" weight="semibold" />
         </div>
     );
 };

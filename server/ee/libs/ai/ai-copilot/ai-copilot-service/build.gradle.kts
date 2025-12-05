@@ -6,15 +6,21 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-autoconfigure-vector-store-pgvector")
     implementation("org.springframework.boot:spring-boot-autoconfigure")
     implementation("org.springframework.ai:spring-ai-advisors-vector-store")
+    implementation("org.springframework.ai:spring-ai-anthropic")
     implementation("org.springframework.ai:spring-ai-openai")
     implementation("org.springframework.data:spring-data-jdbc")
     implementation("org.postgresql:postgresql:42.7.5")
-
+    implementation(files("../libs/ag-ui/core-0.0.1.jar"))
+    implementation(files("../libs/ag-ui/json-0.0.1.jar"))
+    implementation(files("../libs/ag-ui/server-0.0.1.jar"))
+    implementation(files("../libs/ag-ui/spring-ai-1.0.1.jar"))
     implementation(project(":server:libs:atlas:atlas-configuration:atlas-configuration-api"))
     implementation(project(":server:libs:config:app-config"))
     implementation(project(":server:libs:core:commons:commons-util"))
     implementation(project(":server:libs:platform:platform-component:platform-component-api"))
     implementation(project(":server:libs:platform:platform-workflow:platform-workflow-task-dispatcher:platform-workflow-task-dispatcher-api"))
+    implementation(project(":server:libs:ai:mcp:mcp-tool:mcp-tool-automation"))
+    implementation(project(":server:libs:ai:mcp:mcp-tool:mcp-tool-platform"))
 
     implementation(project(":server:ee:libs:ai:ai-copilot:ai-copilot-api"))
 }

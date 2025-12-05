@@ -28,6 +28,7 @@ import static com.bytechef.task.dispatcher.branch.constant.BranchTaskDispatcherC
 import com.bytechef.atlas.configuration.domain.Task;
 import com.bytechef.atlas.configuration.domain.WorkflowTask;
 import com.bytechef.atlas.coordinator.event.TaskExecutionCompleteEvent;
+import com.bytechef.atlas.coordinator.task.dispatcher.ErrorHandlingTaskDispatcher;
 import com.bytechef.atlas.coordinator.task.dispatcher.TaskDispatcher;
 import com.bytechef.atlas.coordinator.task.dispatcher.TaskDispatcherResolver;
 import com.bytechef.atlas.execution.domain.Context.Classname;
@@ -40,7 +41,6 @@ import com.bytechef.evaluator.Evaluator;
 import com.fasterxml.jackson.core.type.TypeReference;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -53,7 +53,7 @@ import org.springframework.context.ApplicationEventPublisher;
  * @since Jun 3, 2017
  * @see BranchTaskCompletionHandler
  */
-public class BranchTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDispatcherResolver {
+public class BranchTaskDispatcher extends ErrorHandlingTaskDispatcher implements TaskDispatcherResolver {
 
     private final ContextService contextService;
     private final Evaluator evaluator;
@@ -68,6 +68,8 @@ public class BranchTaskDispatcher implements TaskDispatcher<TaskExecution>, Task
         TaskDispatcher<? super Task> taskDispatcher, TaskExecutionService taskExecutionService,
         TaskFileStorage taskFileStorage) {
 
+        super(eventPublisher);
+
         this.evaluator = evaluator;
         this.contextService = contextService;
         this.eventPublisher = eventPublisher;
@@ -77,7 +79,7 @@ public class BranchTaskDispatcher implements TaskDispatcher<TaskExecution>, Task
     }
 
     @Override
-    public void dispatch(TaskExecution taskExecution) {
+    public void doDispatch(TaskExecution taskExecution) {
         taskExecution.setStartDate(Instant.now());
         taskExecution.setStatus(TaskExecution.Status.STARTED);
 
@@ -86,8 +88,12 @@ public class BranchTaskDispatcher implements TaskDispatcher<TaskExecution>, Task
         Map<String, ?> selectedCase = resolveCase(taskExecution);
 
         if (selectedCase.containsKey(TASKS)) {
-            List<WorkflowTask> subWorkflowTasks = MapUtils.getList(
-                selectedCase, TASKS, WorkflowTask.class, Collections.emptyList());
+            List<WorkflowTask> subWorkflowTasks = MapUtils
+                .getList(
+                    selectedCase, TASKS, new TypeReference<Map<String, ?>>() {}, List.of())
+                .stream()
+                .map(WorkflowTask::new)
+                .toList();
 
             if (subWorkflowTasks.isEmpty()) {
                 taskExecution.setStartDate(Instant.now());
@@ -134,6 +140,7 @@ public class BranchTaskDispatcher implements TaskDispatcher<TaskExecution>, Task
 
             eventPublisher.publishEvent(new TaskExecutionCompleteEvent(taskExecution));
         }
+
     }
 
     @Override

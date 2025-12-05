@@ -222,7 +222,6 @@ class WorkflowValidatorTest {
 
             WorkflowValidator.validateWorkflowTasks(taskJsonNodes, taskDefinitionMap, taskOutputMap, errors, warnings);
 
-            // this is an exception, every value can be converted to string
             assertEquals("", errors.toString());
             assertEquals("", warnings.toString());
         } catch (Exception e) {
@@ -499,8 +498,9 @@ class WorkflowValidatorTest {
                 new PropertyInfo("name", "STRING", null, false, true, null, null)),
             "component/v1/action1", List.of(
                 new PropertyInfo("configs", "ARRAY", null, false, true, null, List.of(
-                    new PropertyInfo("setting", "STRING", null, true, true, null, null),
-                    new PropertyInfo("enabled", "BOOLEAN", null, false, true, null, null)))));
+                    new PropertyInfo("ignored", "OBJECT", null, false, true, null, List.of(
+                        new PropertyInfo("setting", "STRING", null, true, true, null, null),
+                        new PropertyInfo("enabled", "BOOLEAN", null, false, true, null, null)))))));
 
         Map<String, PropertyInfo> taskOutputMap = Map.of(
             "component/v1/trigger1", trigger1);
@@ -533,7 +533,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         String string = errors.toString();
 
@@ -553,7 +553,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         String string = errors.toString();
 
@@ -572,7 +572,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         assertEquals("Missing required field: label", errors.toString());
     }
@@ -589,7 +589,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         assertEquals("Missing required field: type", errors.toString());
     }
@@ -606,7 +606,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         assertEquals("Missing required field: name", errors.toString());
     }
@@ -624,7 +624,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         assertEquals("Field 'label' must be a string", errors.toString());
     }
@@ -642,7 +642,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         assertEquals("Field 'name' must be a string", errors.toString());
     }
@@ -660,7 +660,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         assertEquals("Field 'type' must be a string", errors.toString());
     }
@@ -678,7 +678,25 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(validTask, errors);
+        TaskValidator.validateTaskStructure(validTask, errors);
+
+        assertEquals("", errors.toString());
+    }
+
+    @Test
+    void validateTaskStructureDifferentOrderNoErrors() {
+        String validTask = """
+            {
+                "parameters": {},
+                "name": "testTask",
+                "type": "component/v1/action",
+                "label": "Test Task"
+            }
+            """;
+
+        StringBuilder errors = new StringBuilder();
+
+        TaskValidator.validateTaskStructure(validTask, errors);
 
         assertEquals("", errors.toString());
     }
@@ -703,7 +721,7 @@ class WorkflowValidatorTest {
 
             StringBuilder errors = new StringBuilder();
 
-            TaskValidator.validateTask(validTask, errors);
+            TaskValidator.validateTaskStructure(validTask, errors);
 
             assertEquals("", errors.toString(), "Type should be valid: " + type);
         }
@@ -721,7 +739,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         assertEquals("Missing required field: parameters", errors.toString());
     }
@@ -739,7 +757,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         assertEquals("Field 'parameters' must be an object", errors.toString());
     }
@@ -750,7 +768,7 @@ class WorkflowValidatorTest {
 
         StringBuilder errors = new StringBuilder();
 
-        TaskValidator.validateTask(invalidTask, errors);
+        TaskValidator.validateTaskStructure(invalidTask, errors);
 
         assertEquals("Task must be an object", errors.toString());
     }
@@ -762,6 +780,30 @@ class WorkflowValidatorTest {
                 "name": "John",
                 "age": 30,
                 "active": true
+            }
+            """;
+
+        List<PropertyInfo> taskDefinition = List.of(
+            new PropertyInfo("name", "STRING", null, true, true, null, null),
+            new PropertyInfo("age", "NUMBER", null, false, true, null, null),
+            new PropertyInfo("active", "BOOLEAN", null, false, true, null, null));
+
+        StringBuilder errors = new StringBuilder();
+        StringBuilder warnings = new StringBuilder();
+
+        TaskValidator.validateTaskParameters(taskParameters, taskDefinition, errors, warnings);
+
+        assertEquals("", errors.toString());
+        assertEquals("", warnings.toString());
+    }
+
+    @Test
+    void validateTaskParametersDifferentOrderNoErrors() {
+        String taskParameters = """
+            {
+                "active": true,
+                "age": 30,
+                "name": "John"
             }
             """;
 
@@ -1008,10 +1050,10 @@ class WorkflowValidatorTest {
 
         List<PropertyInfo> taskDefinition = List.of(
             new PropertyInfo(
-                "items", "ARRAY", null, false, true, null,
-                List.of(
-                    new PropertyInfo("name", "STRING", null, false, true, null, null),
-                    new PropertyInfo("age", "INTEGER", null, false, true, null, null))),
+                "items", "ARRAY", null, false, true, null, List.of(
+                    new PropertyInfo(null, "OBJECT", null, false, true, null, List.of(
+                        new PropertyInfo("name", "STRING", null, false, true, null, null),
+                        new PropertyInfo("age", "INTEGER", null, false, true, null, null))))),
             new PropertyInfo("config", "OBJECT", null, false, true, null, null));
 
         StringBuilder errors = new StringBuilder();
@@ -1115,11 +1157,11 @@ class WorkflowValidatorTest {
             """;
 
         List<PropertyInfo> taskDefinition = List.of(
-            new PropertyInfo("items", "ARRAY", null, false, true, null,
-                List.of(
+            new PropertyInfo("items", "ARRAY", null, false, true, null, List.of(
+                new PropertyInfo("name", "OBJECT", null, true, true, null, List.of(
                     new PropertyInfo("name", "STRING", null, true, true, null, null),
                     new PropertyInfo("age", "INTEGER", null, true, true, null, null),
-                    new PropertyInfo("adult", "BOOLEAN", null, true, true, "items[index].age >= 18", null))));
+                    new PropertyInfo("adult", "BOOLEAN", null, true, true, "items[index].age >= 18", null))))));
 
         StringBuilder errors = new StringBuilder();
         StringBuilder warnings = new StringBuilder();
@@ -1494,7 +1536,7 @@ class WorkflowValidatorTest {
         List<PropertyInfo> taskDefinition = List.of(
             new PropertyInfo("enableFeature", "FLOAT", null, true, true, null, null),
             new PropertyInfo(
-                "featureConfig", "OBJECT", null, false, true, "50 > enableFeature",
+                "featureConfig", "OBJECT", null, true, true, "50 > enableFeature",
                 List.of(
                     new PropertyInfo("setting1", "STRING", null, true, true, null, null),
                     new PropertyInfo("setting2", "STRING", null, false, true, null, null))));
@@ -1524,17 +1566,22 @@ class WorkflowValidatorTest {
             new PropertyInfo("basicConfig", "OBJECT", null, false, true, "mode == 'basic'",
                 List.of(new PropertyInfo("name", "STRING", null, true, true, null, null))),
             new PropertyInfo(
-                "advancedConfig", "OBJECT", null, false, true, "mode == 'advanced'",
+                "advancedConfig", "OBJECT", null, true, true, "mode == 'advanced'",
                 List.of(
-                    new PropertyInfo("name", "STRING", null, true, true, null, null),
-                    new PropertyInfo("extra", "STRING", null, false, true, null, null))));
+                    new PropertyInfo("mandatory", "OBJECT", null, true, true, null, List.of(
+                        new PropertyInfo("name", "STRING", null, true, true, null, null))),
+                    new PropertyInfo("extra", "STRING", null, false, true, null, List.of(
+                        new PropertyInfo("name", "STRING", null, true, true, null, null))))));
 
         StringBuilder errors = new StringBuilder();
         StringBuilder warnings = new StringBuilder();
 
         TaskValidator.validateTaskParameters(taskParameters, taskDefinition, errors, warnings);
 
-        assertEquals("Missing required property: advancedConfig.name", errors.toString());
+        assertEquals("""
+            Missing required property: advancedConfig
+            Missing required property: advancedConfig.mandatory
+            Missing required property: advancedConfig.mandatory.name""", errors.toString());
         assertEquals("""
             Property 'basicConfig' is not defined in task definition
             Property 'basicConfig.name' is not defined in task definition""", warnings.toString());
@@ -1726,7 +1773,7 @@ class WorkflowValidatorTest {
         TaskValidator.validateTaskParameters(taskParameters, taskDefinition, errors, warnings);
 
         assertEquals("", errors.toString());
-        assertEquals("", warnings.toString());
+        assertEquals("Invalid logic for display condition: 'enableAdvanced == true'", warnings.toString());
     }
 
     @Test
@@ -2439,6 +2486,31 @@ class WorkflowValidatorTest {
                     }
                 ],
                 "tasks": []
+            }
+            """;
+
+        StringBuilder errors = new StringBuilder();
+
+        WorkflowValidator.validateWorkflowStructure(validWorkflow, errors);
+
+        assertEquals("", errors.toString());
+    }
+
+    @Test
+    void validateWorkflowStructureDifferentOrderNoErrors() {
+        String validWorkflow = """
+            {
+                "tasks": [],
+                "description": "workflowDescription",
+                "label": "workflowName",
+                "triggers": [
+                    {
+                        "type": "manual/v1/manual",
+                        "name": "trigger_1",
+                        "label": "Manual"
+                    }
+                ],
+                "inputs": []
             }
             """;
 
@@ -3607,7 +3679,7 @@ class WorkflowValidatorTest {
             "component/v1/trigger1", List.of(
                 new PropertyInfo("name", "STRING", null, false, true, null, null)),
             "condition/v1", List.of(
-                new PropertyInfo("rawExpression", "BOOLEAN", null, false, true, null, null),
+                new PropertyInfo("rawExpression", "BOOLEAN", null, true, true, null, null),
                 new PropertyInfo("conditions", "ARRAY", null, false, true, "rawExpression == false", List.of(
                     new PropertyInfo(null, "ARRAY", null, false, false, null, List.of(
                         new PropertyInfo("boolean", "OBJECT", null, false, false, null, List.of(
@@ -3702,7 +3774,6 @@ class WorkflowValidatorTest {
         StringBuilder errors = new StringBuilder();
         StringBuilder warnings = new StringBuilder();
 
-        // Mock task definition and output providers
         WorkflowValidator.TaskDefinitionProvider taskDefProvider = (taskType, kind) -> List.of(
             new PropertyInfo("name", "STRING", null, false, true, null, null));
 

@@ -25,7 +25,6 @@ Version: 1
 
 |      Name       |      Label     |     Type     |     Description     | Required |
 |:---------------:|:--------------:|:------------:|:-------------------:|:--------:|
-| yourDomain | Your domain | STRING | e.g https://&#123;yourDomain&#125;&#125;.atlassian.net | true |
 | clientId | Client Id | STRING |  | true |
 | clientSecret | Client Secret | STRING |  | true |
 
@@ -48,9 +47,9 @@ Name: assignIssue
 
 |      Name       |      Label     |     Type     |     Description     | Required |
 |:---------------:|:--------------:|:------------:|:-------------------:|:--------:|
-| project | Project ID | STRING | ID of the project where the issue is located. | true |
+| project | Project ID | STRING | ID of the project where the issue is located. | false |
 | issueId | Issue ID | STRING <details> <summary> Depends On </summary> project </details> | ID of the issue that will be assigned. | true |
-| accountId | Account ID | STRING <details> <summary> Depends On </summary> project </details> | ID of the account user who will be assigned the issue. | true |
+| accountId | Account ID | STRING | ID of the account user who will be assigned the issue. | true |
 
 #### Example JSON Structure
 ```json
@@ -86,7 +85,7 @@ Name: createIssue
 | summary | Summary | STRING | A brief summary of the issue. | true |
 | issuetype | Issue Type ID | STRING <details> <summary> Depends On </summary> project </details> | Id of the issue type. | true |
 | parent | Parent Issue ID | STRING <details> <summary> Depends On </summary> project </details> | ID of the parent issue. | true |
-| assignee | Assignee ID | STRING <details> <summary> Depends On </summary> project </details> | ID of the user who will be assigned to the issue. | false |
+| assignee | Assignee ID | STRING | ID of the user who will be assigned to the issue. | false |
 | priority | Priority ID | STRING | ID of the priority of the issue. | false |
 | description | Description | STRING | Description of the issue. | false |
 
@@ -145,7 +144,7 @@ Name: createIssueComment
 
 |      Name       |      Label     |     Type     |     Description     | Required |
 |:---------------:|:--------------:|:------------:|:-------------------:|:--------:|
-| project | Project ID | STRING | ID of the project where the issue is located. | true |
+| project | Project ID | STRING | ID of the project where the issue is located. | false |
 | issueId | Issue ID | STRING <details> <summary> Depends On </summary> project </details> | ID of the issue where the comment will be added. | true |
 | comment | Comment | STRING | The text of the comment. | true |
 
@@ -224,7 +223,7 @@ Name: getIssue
 
 |      Name       |      Label     |     Type     |     Description     | Required |
 |:---------------:|:--------------:|:------------:|:-------------------:|:--------:|
-| project | Project ID | STRING | ID of the project where the issue is located. | true |
+| project | Project ID | STRING | ID of the project where the issue is located. | false |
 | issueId | Issue ID | STRING <details> <summary> Depends On </summary> project </details> |  | true |
 
 #### Example JSON Structure
@@ -291,14 +290,13 @@ Type: OBJECT
 ### Search Issues
 Name: searchForIssuesUsingJql
 
-`Search for issues using JQL`
+`Search for issues using JQL.`
 
 #### Properties
 
 |      Name       |      Label     |     Type     |     Description     | Required |
 |:---------------:|:--------------:|:------------:|:-------------------:|:--------:|
-| jql | JQL | STRING | The JQL that defines the search. If no JQL expression is provided, all issues are returned | false |
-| maxResults | Max Results | INTEGER | The maximum number of items to return per page. | true |
+| jql | JQL | STRING | The JQL that defines the search. If no JQL expression is provided, all issues are returned. | true |
 
 #### Example JSON Structure
 ```json
@@ -306,8 +304,7 @@ Name: searchForIssuesUsingJql
   "label" : "Search Issues",
   "name" : "searchForIssuesUsingJql",
   "parameters" : {
-    "jql" : "",
-    "maxResults" : 1
+    "jql" : ""
   },
   "type" : "jira/v1/searchForIssuesUsingJql"
 }
@@ -327,9 +324,6 @@ Items Type: OBJECT
 |     Name     |     Type     |     Description     |
 |:------------:|:------------:|:-------------------:|
 | id | STRING | The ID of the issue. |
-| key | STRING | The key of the issue. |
-| self | STRING | The URL of the issue details. |
-| fields | OBJECT <details> <summary> Properties </summary> &#123;&#123;STRING\(id), STRING\(name)&#125;\(issuetype), &#123;STRING\(id), STRING\(name)&#125;\(project), &#123;STRING\(id), STRING\(name)&#125;\(priority), &#123;STRING\(accountId), STRING\(displayName)&#125;\(assignee), STRING\(summary)&#125; </details> |  |
 
 
 
@@ -338,28 +332,7 @@ Items Type: OBJECT
 #### Output Example
 ```json
 [ {
-  "id" : "",
-  "key" : "",
-  "self" : "",
-  "fields" : {
-    "issuetype" : {
-      "id" : "",
-      "name" : ""
-    },
-    "project" : {
-      "id" : "",
-      "name" : ""
-    },
-    "priority" : {
-      "id" : "",
-      "name" : ""
-    },
-    "assignee" : {
-      "accountId" : "",
-      "displayName" : ""
-    },
-    "summary" : ""
-  }
+  "id" : ""
 } ]
 ```
 
@@ -476,8 +449,31 @@ To create a Custom Action, simply specify the desired HTTP method, path, and any
 
 # Additional Instructions
 
-## CONNECTION
+## Connection Setup
 
-<div style={{ position: 'relative', height:0, width: '100%', overflow: 'hidden', zIndex: 99999, boxSizing: 'border-box', paddingBottom: 'calc(50.05219207% + 32px)'}}>
-    <iframe src="https://www.guidejar.com/embed/c1894615-16ae-48ae-9706-7bf831aa8963?type=1&controls=on" width="100%" height="100%" style={{height:'100%', position:'absolute', inset:0}} allowFullScreen frameBorder="0"></iframe>
-</div>
+Follow these steps to connect Jira Cloud to ByteChef using OAuth 2.0.
+
+1. Open the Atlassian Developer Console: https://developer.atlassian.com/console/
+2. Sign in with your Atlassian account (create one if needed).
+3. Click **Create** and choose **OAuth 2.0 integration**.
+4. Enter the app details (e.g., App name: "ByteChef Jira Integration") and accept Atlassian's developer terms, then click **Create**.
+
+5. Configure permissions (scopes):
+   - In the Permissions tab, add the following scopes required by ByteChef Jira component:
+     - manage:jira-webhook
+     - read:jira-work
+     - write:jira-work
+     - read:jira-user
+   - You can adjust scopes later if your workflows need more/less access.
+
+6. Configure a redirect (callback) URL:
+   - Go to the **Authorization** tab and add the Callback URL:
+        - `https://app.bytechef.io/callback` (Cloud)
+        - `http://127.0.0.1:5173/callback` (Local dev)
+
+7. Retrieve credentials:
+   - Open the **Settings** page of your app and copy the **Client ID** and **Client Secret**.
+
+Notes:
+
+- Jira Cloud only: This connection uses Atlassian Cloud APIs. After consent, ByteChef automatically discovers the correct Jira site base URL.

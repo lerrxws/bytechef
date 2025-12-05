@@ -29,6 +29,7 @@ import com.bytechef.atlas.configuration.constant.WorkflowConstants;
 import com.bytechef.atlas.configuration.domain.Task;
 import com.bytechef.atlas.configuration.domain.WorkflowTask;
 import com.bytechef.atlas.coordinator.event.TaskExecutionCompleteEvent;
+import com.bytechef.atlas.coordinator.event.TaskExecutionErrorEvent;
 import com.bytechef.atlas.coordinator.task.dispatcher.TaskDispatcher;
 import com.bytechef.atlas.execution.domain.Context;
 import com.bytechef.atlas.execution.domain.TaskExecution;
@@ -39,6 +40,7 @@ import com.bytechef.atlas.file.storage.TaskFileStorage;
 import com.bytechef.atlas.file.storage.TaskFileStorageImpl;
 import com.bytechef.commons.util.JsonUtils;
 import com.bytechef.commons.util.MapUtils;
+import com.bytechef.evaluator.Evaluator;
 import com.bytechef.evaluator.SpelEvaluator;
 import com.bytechef.file.storage.base64.service.Base64FileStorageService;
 import com.bytechef.jackson.config.JacksonConfiguration;
@@ -46,7 +48,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.jackson.JsonComponentModule;
 import org.springframework.context.ApplicationEventPublisher;
@@ -55,6 +56,8 @@ import org.springframework.context.ApplicationEventPublisher;
  * @author Arik Cohen
  */
 public class EachTaskDispatcherTest {
+
+    private static final Evaluator EVALUATOR = SpelEvaluator.create();
 
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final ContextService contextService = mock(ContextService.class);
@@ -72,16 +75,18 @@ public class EachTaskDispatcherTest {
     }
 
     @Test
-    public void testDispatch1() {
-        Assertions.assertThrows(NullPointerException.class, () -> {
-            EachTaskDispatcher dispatcher = new EachTaskDispatcher(
-                contextService, counterService, SpelEvaluator.create(), eventPublisher, taskDispatcher,
-                taskExecutionService, taskFileStorage);
+    public void testEachTaskDispatcherWhenMissingRequiredParameter() {
+        EachTaskDispatcher dispatcher = new EachTaskDispatcher(
+            contextService, counterService, EVALUATOR, eventPublisher, taskDispatcher, taskExecutionService,
+            taskFileStorage);
 
-            dispatcher.dispatch(TaskExecution.builder()
-                .workflowTask(new WorkflowTask(Map.of(WorkflowConstants.NAME, "name", WorkflowConstants.TYPE, "type")))
+        dispatcher.dispatch(
+            TaskExecution.builder()
+                .workflowTask(
+                    new WorkflowTask(Map.of(WorkflowConstants.NAME, "name", WorkflowConstants.TYPE, "type")))
                 .build());
-        });
+
+        verify(eventPublisher, times(1)).publishEvent(any(TaskExecutionErrorEvent.class));
     }
 
     @Test
@@ -94,7 +99,7 @@ public class EachTaskDispatcherTest {
                 .build());
 
         EachTaskDispatcher dispatcher = new EachTaskDispatcher(
-            contextService, counterService, SpelEvaluator.create(), eventPublisher, taskDispatcher,
+            contextService, counterService, EVALUATOR, eventPublisher, taskDispatcher,
             taskExecutionService, taskFileStorage);
         TaskExecution taskExecution = TaskExecution.builder()
             .workflowTask(
@@ -123,7 +128,7 @@ public class EachTaskDispatcherTest {
     @Test
     public void testDispatch3() {
         EachTaskDispatcher dispatcher = new EachTaskDispatcher(
-            contextService, counterService, SpelEvaluator.create(), eventPublisher, taskDispatcher,
+            contextService, counterService, EVALUATOR, eventPublisher, taskDispatcher,
             taskExecutionService, taskFileStorage);
         TaskExecution taskExecution = TaskExecution.builder()
             .id(

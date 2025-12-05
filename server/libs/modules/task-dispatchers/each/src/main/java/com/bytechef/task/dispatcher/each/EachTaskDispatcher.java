@@ -26,6 +26,7 @@ import static com.bytechef.task.dispatcher.each.constant.EachTaskDispatcherConst
 import com.bytechef.atlas.configuration.domain.Task;
 import com.bytechef.atlas.configuration.domain.WorkflowTask;
 import com.bytechef.atlas.coordinator.event.TaskExecutionCompleteEvent;
+import com.bytechef.atlas.coordinator.task.dispatcher.ErrorHandlingTaskDispatcher;
 import com.bytechef.atlas.coordinator.task.dispatcher.TaskDispatcher;
 import com.bytechef.atlas.coordinator.task.dispatcher.TaskDispatcherResolver;
 import com.bytechef.atlas.execution.domain.Context;
@@ -37,6 +38,7 @@ import com.bytechef.atlas.file.storage.TaskFileStorage;
 import com.bytechef.commons.util.MapUtils;
 import com.bytechef.evaluator.Evaluator;
 import com.bytechef.task.dispatcher.each.constant.EachTaskDispatcherConstants;
+import com.fasterxml.jackson.core.type.TypeReference;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Instant;
 import java.util.HashMap;
@@ -53,7 +55,7 @@ import org.springframework.context.ApplicationEventPublisher;
  * @author Arik Cohen
  * @since Apr 25, 2017
  */
-public class EachTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDispatcherResolver {
+public class EachTaskDispatcher extends ErrorHandlingTaskDispatcher implements TaskDispatcherResolver {
 
     private final ContextService contextService;
     private final CounterService counterService;
@@ -69,6 +71,8 @@ public class EachTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDi
         ApplicationEventPublisher eventPublisher, TaskDispatcher<? super Task> taskDispatcher,
         TaskExecutionService taskExecutionService, TaskFileStorage taskFileStorage) {
 
+        super(eventPublisher);
+
         this.contextService = contextService;
         this.counterService = counterService;
         this.evaluator = evaluator;
@@ -79,8 +83,10 @@ public class EachTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDi
     }
 
     @Override
-    public void dispatch(TaskExecution taskExecution) {
-        WorkflowTask iteratee = MapUtils.getRequired(taskExecution.getParameters(), ITERATEE, WorkflowTask.class);
+    public void doDispatch(TaskExecution taskExecution) {
+        Map<String, ?> workflowMap = MapUtils.getRequired(
+            taskExecution.getParameters(), ITERATEE, new TypeReference<Map<String, ?>>() {});
+        WorkflowTask iteratee = new WorkflowTask(workflowMap);
         List<Object> items = MapUtils.getRequiredList(taskExecution.getParameters(), ITEMS, Object.class);
 
         taskExecution.setStartDate(Instant.now());
@@ -128,6 +134,7 @@ public class EachTaskDispatcher implements TaskDispatcher<TaskExecution>, TaskDi
                 taskDispatcher.dispatch(iterateeTaskExecution);
             }
         }
+
     }
 
     @Override

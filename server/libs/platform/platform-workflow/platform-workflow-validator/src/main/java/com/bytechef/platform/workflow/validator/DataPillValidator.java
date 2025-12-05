@@ -40,28 +40,12 @@ class DataPillValidator {
     }
 
     /**
-     * Validates data pills in a task's parameters, with access to all tasks for loop type validation and task
-     * definition for type checking.
-     */
-    public static void validateTaskDataPills(
-        JsonNode taskJsonNode, Map<String, PropertyInfo> taskOutput, List<String> taskNames,
-        Map<String, String> taskNameToTypeMap, StringBuilder errors, StringBuilder warnings,
-        Map<String, JsonNode> allTaskMap, List<PropertyInfo> taskDefinition, boolean skipTaskOrderValidation) {
-
-        validateTaskDataPills(
-            taskJsonNode, taskOutput, taskNames, taskNameToTypeMap, errors, warnings, allTaskMap, taskDefinition,
-            skipTaskOrderValidation, false);
-    }
-
-    /**
      * Validates data pills in a task's parameters, with access to all tasks for loop type validation, task definition
      * for type checking, and optional task order validation skipping.
      */
     public static void validateTaskDataPills(
-        JsonNode taskJsonNode, Map<String, PropertyInfo> taskOutputMap, List<String> taskNames,
-        Map<String, String> taskNameToTypeMap, StringBuilder errors, StringBuilder warnings,
-        Map<String, JsonNode> allTaskMap, List<PropertyInfo> taskDefinition, boolean skipTaskOrderValidation,
-        boolean skipNestedTaskValidation) {
+        JsonNode taskJsonNode, ValidationContext context, List<PropertyInfo> taskDefinition,
+        boolean skipTaskOrderValidation) {
 
         JsonNode parametersJsonNode = taskJsonNode.get("parameters");
 
@@ -73,14 +57,14 @@ class DataPillValidator {
 
         String name = nameJsonNode.asText();
 
-        TaskValidationContext context = new TaskValidationContext();
+        TaskValidationContext taskContext = new TaskValidationContext();
 
-        context.skipTaskOrderValidation = skipTaskOrderValidation;
-        context.skipNestedTaskValidation = skipNestedTaskValidation;
+        taskContext.skipTaskOrderValidation = skipTaskOrderValidation;
 
         findDataPillsInNode(
-            parametersJsonNode, "", name, taskOutputMap, taskNames, taskNameToTypeMap, errors, warnings, context,
-            allTaskMap, taskDefinition);
+            parametersJsonNode, "", name, context.getTaskOutputs(), context.getTaskNames(),
+            context.getTaskNameToTypeMap(), context.getErrors(), context.getWarnings(), taskContext,
+            context.getAllTasksMap(), taskDefinition);
 
     }
 
@@ -108,9 +92,7 @@ class DataPillValidator {
                     context, allTasksMap, taskDefinition);
             }
         } else if (jsonNode.isArray()) {
-            // Check if this array contains TASK type elements that should be skipped
-            if (context.skipNestedTaskValidation && isTaskTypeArray(currentPath, taskDefinition)) {
-                // Skip validation of this array since it contains nested tasks that will be validated separately
+            if (isTaskTypeArray(currentPath, taskDefinition)) {
                 return;
             }
 
@@ -143,7 +125,6 @@ class DataPillValidator {
             return null;
         }
 
-        // Split the field path into parts (e.g., "active" or "config.setting")
         String[] pathParts = fieldPath.split("\\.");
 
         List<PropertyInfo> currentProperties = taskDefinition;
@@ -151,7 +132,6 @@ class DataPillValidator {
         for (String part : pathParts) {
             PropertyInfo foundProperty = null;
 
-            // Look for the property in the current level
             for (PropertyInfo property : currentProperties) {
                 if (part.equals(property.name())) {
                     foundProperty = property;
@@ -160,19 +140,17 @@ class DataPillValidator {
             }
 
             if (foundProperty == null) {
-                return null; // Property is not found in definition
+                return null;
             }
 
-            // If this is the last part of the path, return its type
             if (part.equals(pathParts[pathParts.length - 1])) {
                 return foundProperty.type();
             }
 
-            // If not the last part, navigate deeper into nested properties
             if ("OBJECT".equalsIgnoreCase(foundProperty.type()) && foundProperty.nestedProperties() != null) {
                 currentProperties = foundProperty.nestedProperties();
             } else {
-                return null; // Can't navigate deeper
+                return null;
             }
         }
 
@@ -207,12 +185,10 @@ class DataPillValidator {
             return false;
         }
 
-        // Split the path to find the property definition
         String[] pathParts = currentPath.split("\\.");
         List<PropertyInfo> currentProperties = taskDefinition;
 
         for (String part : pathParts) {
-            // Remove array indices from the part (e.g., "items[0]" becomes "items")
             String propertyName = part.replaceAll("\\[\\d+]", "");
 
             PropertyInfo propertyInfo = null;
@@ -229,7 +205,6 @@ class DataPillValidator {
                 return false;
             }
 
-            // Check if this is an ARRAY type with TASK nested properties
             List<PropertyInfo> propertyInfos = propertyInfo.nestedProperties();
             if ("ARRAY".equalsIgnoreCase(propertyInfo.type()) && propertyInfos != null &&
                 propertyInfos.size() == 1) {
@@ -241,7 +216,6 @@ class DataPillValidator {
                 }
             }
 
-            // Continue traversing for nested properties
             if (propertyInfos != null) {
                 currentProperties = propertyInfos;
             } else {
@@ -260,18 +234,15 @@ class DataPillValidator {
             return true;
         }
 
-        // Exact match
         if (expectedType.equalsIgnoreCase(actualType)) {
             return true;
         }
 
-        // Integer and number types are compatible
         if ((expectedType.equalsIgnoreCase("integer") && actualType.equalsIgnoreCase("number")) ||
             (expectedType.equalsIgnoreCase("number") && actualType.equalsIgnoreCase("integer"))) {
             return true;
         }
 
-        // Any type can be converted to string
         return expectedType.equalsIgnoreCase("string");
     }
 
@@ -594,6 +565,5 @@ class DataPillValidator {
     private static class TaskValidationContext {
         boolean stopProcessing = false;
         boolean skipTaskOrderValidation = false;
-        boolean skipNestedTaskValidation = false;
     }
 }

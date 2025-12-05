@@ -49,7 +49,6 @@ class MicrosoftOutlook365GetMailActionTest {
     private final Http.Executor mockedExecutor = mock(Http.Executor.class);
     private Parameters mockedParameters;
     private final Http.Response mockedResponse = mock(Http.Response.class);
-    private final ArgumentCaptor<String> stringArgumentCaptor = ArgumentCaptor.forClass(String.class);
 
     @Test
     void testPerform() {
@@ -89,11 +88,11 @@ class MicrosoftOutlook365GetMailActionTest {
 
             MicrosoftOutlook365Utils.SimpleMessage simpleMessage = new MicrosoftOutlook365Utils.SimpleMessage(
                 "id", "conversationId", "subject", "from", List.of("toRecipient"), List.of("ccRecipient"),
-                List.of("bccRecipient"), "bodyPreview", "bodyHtml", List.of(), "https://example.com");
+                List.of("bccRecipient"), "bodyPreview", "bodyHtml", List.of(), List.of(), "https://example.com");
 
             microsoftOutlook365UtilsMockedStatic
                 .when(() -> MicrosoftOutlook365Utils.createSimpleMessage(
-                    contextArgumentCaptor.capture(), mapArgumentCaptor.capture(), stringArgumentCaptor.capture()))
+                    contextArgumentCaptor.capture(), mapArgumentCaptor.capture()))
                 .thenReturn(simpleMessage);
 
             Object result = MicrosoftOutlook365GetMailAction.perform(mockedParameters, mockedParameters, mockedContext);
@@ -101,7 +100,6 @@ class MicrosoftOutlook365GetMailActionTest {
             assertEquals(simpleMessage, result);
             assertEquals(mockedContext, contextArgumentCaptor.getValue());
             assertEquals(responseMap, mapArgumentCaptor.getValue());
-            assertEquals("messageId", stringArgumentCaptor.getValue());
         }
     }
 }

@@ -22,11 +22,13 @@ const createTestQueryClient = () =>
 let queryClient: QueryClient;
 
 // Mocks for UI components used inside dropdown/scroll
-vi.mock('@/components/ui/button', () => ({
+vi.mock('@/components/Button/Button', () => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    Button: ({children, ...props}: any) => (
+    default: ({children, icon, label, ...props}: any) => (
         <button data-testid="btn" {...props}>
-            {children}
+            {icon}
+
+            {label ?? children}
         </button>
     ),
 }));
@@ -104,7 +106,6 @@ vi.mock('@/shared/queries/automation/workflows.queries', () => ({
 vi.mock('@/pages/automation/project/components/projects-sidebar/hooks/useProjectsLeftSidebar', () => ({
     useProjectsLeftSidebar: () => ({
         calculateTimeDifference: vi.fn(),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         createProjectWorkflowMutation: {mutate: vi.fn()},
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         getFilteredWorkflows: (workflows: any[]) => workflows || [],
@@ -232,18 +233,16 @@ describe('ProjectsLeftSidebar', () => {
         expect(items).toHaveLength(workflows.length);
     });
 
-    it('shows New workflow button and opens WorkflowDialog on From Scratch click', async () => {
+    it('shows Workflow button and opens WorkflowDialog on click', async () => {
         setupQueries({selectedProjectId: 9});
 
         renderWithProviders(<ProjectsLeftSidebar {...baseProps} projectId={9} />);
 
         // Button visible
-        expect(screen.getByText('New workflow')).toBeInTheDocument();
+        expect(screen.getByText('Workflow')).toBeInTheDocument();
 
-        // Open menu and click From Scratch
-        fireEvent.click(screen.getByText('New workflow'));
-        const fromScratchItems = screen.getAllByRole('menuitem', {name: /From Scratch/i});
-        fireEvent.click(fromScratchItems[0]);
+        // Click primary button to open dialog
+        fireEvent.click(screen.getByText('Workflow'));
 
         expect(await screen.findByRole('dialog')).toBeInTheDocument();
     });
@@ -253,8 +252,10 @@ describe('ProjectsLeftSidebar', () => {
 
         renderWithProviders(<ProjectsLeftSidebar {...baseProps} projectId={3} />);
 
-        // Click New workflow -> Import Workflow
-        fireEvent.click(screen.getByText('New workflow'));
+        // Open dropdown (chevron) -> Import Workflow
+        const buttons = screen.getAllByTestId('btn');
+        const chevronBtn = buttons[buttons.length - 1]; // the chevron is rendered after the primary button
+        fireEvent.click(chevronBtn);
         fireEvent.click(screen.getByText(/Import Workflow/i));
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

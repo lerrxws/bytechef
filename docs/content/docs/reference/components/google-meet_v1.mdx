@@ -177,28 +177,32 @@ Name: listParticipants
 
 
 
-Type: OBJECT
+Type: ARRAY
+
+
+Items Type: OBJECT
 
 
 #### Properties
-
 |     Name     |     Type     |     Description     |
 |:------------:|:------------:|:-------------------:|
-| participants | ARRAY <details> <summary> Items </summary> [&#123;STRING\(name), &#123;&#125;\(user), STRING\(earliestStartTime), STRING\(latestEndTime)&#125;] </details> | List of participants in one page. |
+| name | STRING | Resource name of the participant.Format: conferenceRecords/&#123;conferenceRecord&#125;/participants/&#123;participant&#125; |
+| user | OBJECT <details> <summary> Properties </summary> &#123;&#125; </details> | User can be of type: signedinUser, anonymousUser, phoneUser |
+| earliestStartTime | STRING | Time when the participant first joined the meeting. |
+| latestEndTime | STRING | Time when the participant left the meeting for the last time. This can be null if it's an active meeting. |
+
 
 
 
 
 #### Output Example
 ```json
-{
-  "participants" : [ {
-    "name" : "",
-    "user" : { },
-    "earliestStartTime" : "",
-    "latestEndTime" : ""
-  } ]
-}
+[ {
+  "name" : "",
+  "user" : { },
+  "earliestStartTime" : "",
+  "latestEndTime" : ""
+} ]
 ```
 
 
@@ -210,14 +214,25 @@ Type: OBJECT
 
 ## Connection Setup
 
-[Setting up OAuth2](https://support.google.com/googleapi/answer/6158849?hl=en)
+### Create OAuth 2.0 Application
 
-<div style={{ position: 'relative', height: 0, width: '100%', overflow: 'hidden', zIndex: 99999, boxSizing: 'border-box', paddingBottom: 'calc(50.05219207% + 32px)' }}>
-    <iframe src="https://www.guidejar.com/embed/fec74020-26bb-43dd-814c-f8b907f6f45b?type=1&controls=on" width="100%" height="100%" style={{ height: '100%', position: 'absolute', inset: 0 }} allowFullScreen frameBorder="0"></iframe>
-</div>
+Creation of OAuth 2.0 application is documented [here](/reference/components/google-application-setup_v1#create-oauth-20-application).
 
-Turning on Meet API
+### Enable Google Meet REST API
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/), select your project.
+2. Go to the **APIs & Services**.
+3. Click on **ENABLE APIS AND SERVICES**.
+4. Search for "google meet rest api" in the search bar.
+5. Click on **Google Meet REST API**.
+6. Click **Enable**.
+
 <div style={{ position: 'relative', height: 0, width: '100%', overflow: 'hidden', zIndex: 99999, boxSizing: 'border-box', paddingBottom: 'calc(50.05219207% + 32px)' }}>
     <iframe src="https://www.guidejar.com/embed/1CkDQzRt6lbwhSWkjhQu?type=1&controls=on" width="100%" height="100%" style={{ position: 'absolute', inset: 0 }} allowFullScreen frameBorder="0"></iframe>
 </div>
 
+## Troubleshooting
+
+### Access Blocked: Verification Process Not Completed
+
+Documentation for how to add a test user can be found [here](/reference/components/google-application-setup_v1#access-blocked-verification-process-not-completed)

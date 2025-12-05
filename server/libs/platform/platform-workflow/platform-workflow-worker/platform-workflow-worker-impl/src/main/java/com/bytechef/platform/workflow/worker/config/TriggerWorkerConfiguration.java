@@ -16,6 +16,8 @@
 
 package com.bytechef.platform.workflow.worker.config;
 
+import static com.bytechef.commons.util.MemoizationUtils.memoize;
+
 import com.bytechef.atlas.worker.annotation.ConditionalOnWorker;
 import com.bytechef.commons.util.MapUtils;
 import com.bytechef.platform.file.storage.TriggerFileStorage;
@@ -26,6 +28,7 @@ import com.bytechef.platform.workflow.worker.trigger.handler.TriggerHandlerProvi
 import com.bytechef.platform.workflow.worker.trigger.handler.TriggerHandlerRegistry;
 import com.bytechef.platform.workflow.worker.trigger.handler.TriggerHandlerResolver;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
@@ -43,10 +46,14 @@ public class TriggerWorkerConfiguration {
         Map<String, TriggerHandler> triggerHandlerMap,
         @Autowired(required = false) TriggerHandlerProvider triggerHandlerProvider) {
 
-        return MapUtils.concat(
-            triggerHandlerMap,
-            triggerHandlerProvider.getTriggerHandlerMap() == null
-                ? Map.of() : triggerHandlerProvider.getTriggerHandlerMap())::get;
+        Supplier<Map<String, TriggerHandler>> memoize = memoize(
+            () -> MapUtils.concat(
+                triggerHandlerMap,
+                triggerHandlerProvider.getTriggerHandlerMap() == null
+                    ? Map.of() : triggerHandlerProvider.getTriggerHandlerMap()));
+
+        return type -> memoize.get()
+            .get(type);
     }
 
     @Bean

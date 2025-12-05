@@ -109,7 +109,7 @@ const DescriptionTab = ({invalidateWorkflowQueries, nodeDefinition, updateWorkfl
             },
             updateWorkflowMutation,
         });
-    }, 300);
+    }, 600);
 
     const handleNotesChange = useDebouncedCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
         if (!currentNode) {
@@ -177,7 +177,7 @@ const DescriptionTab = ({invalidateWorkflowQueries, nodeDefinition, updateWorkfl
             },
             updateWorkflowMutation,
         });
-    }, 300);
+    }, 600);
 
     let workflowTaskOrTrigger = [...(workflow.tasks ?? []), ...(workflow.triggers ?? [])]?.find(
         (task) => task.name === currentNode?.workflowNodeName
@@ -194,6 +194,7 @@ const DescriptionTab = ({invalidateWorkflowQueries, nodeDefinition, updateWorkfl
                 <Label>Title</Label>
 
                 <Input
+                    className="bg-white"
                     defaultValue={workflowTaskOrTrigger?.label}
                     key={`${currentNode?.componentName}-${workflowTaskOrTrigger?.type}_nodeTitle`}
                     name="nodeTitle"
@@ -205,6 +206,7 @@ const DescriptionTab = ({invalidateWorkflowQueries, nodeDefinition, updateWorkfl
                 <Label>Notes</Label>
 
                 <Textarea
+                    className="bg-white"
                     defaultValue={workflowTaskOrTrigger?.description}
                     key={`${currentNode?.componentName}-${workflowTaskOrTrigger?.type}_nodeNotes`}
                     name="nodeNotes"

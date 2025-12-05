@@ -22,12 +22,13 @@ import com.bytechef.atlas.execution.domain.Job;
 import com.bytechef.atlas.execution.domain.TaskExecution;
 import com.bytechef.atlas.execution.dto.JobParametersDTO;
 import com.bytechef.atlas.execution.service.ContextService;
+import com.bytechef.atlas.execution.service.JobService;
 import com.bytechef.atlas.execution.service.TaskExecutionService;
 import com.bytechef.atlas.file.storage.TaskFileStorage;
 import com.bytechef.commons.util.CollectionUtils;
 import com.bytechef.commons.util.MapUtils;
+import com.bytechef.component.definition.WebhookResponse;
 import com.bytechef.evaluator.Evaluator;
-import com.bytechef.platform.component.definition.WebhookResponse;
 import com.bytechef.platform.component.domain.ComponentDefinition;
 import com.bytechef.platform.component.service.ComponentDefinitionService;
 import com.bytechef.platform.coordinator.job.JobSyncExecutor;
@@ -50,6 +51,7 @@ public class JobTestExecutor {
     private final ComponentDefinitionService componentDefinitionService;
     private final ContextService contextService;
     private final Evaluator evaluator;
+    private final JobService jobService;
     private final JobSyncExecutor jobSyncExecutor;
     private final TaskDispatcherDefinitionService taskDispatcherDefinitionService;
     private final TaskExecutionService taskExecutionService;
@@ -58,12 +60,14 @@ public class JobTestExecutor {
     @SuppressFBWarnings("EI")
     public JobTestExecutor(
         ComponentDefinitionService componentDefinitionService, ContextService contextService, Evaluator evaluator,
-        JobSyncExecutor jobSyncExecutor, TaskDispatcherDefinitionService taskDispatcherDefinitionService,
-        TaskExecutionService taskExecutionService, TaskFileStorage taskFileStorage) {
+        JobService jobService, JobSyncExecutor jobSyncExecutor,
+        TaskDispatcherDefinitionService taskDispatcherDefinitionService, TaskExecutionService taskExecutionService,
+        TaskFileStorage taskFileStorage) {
 
         this.componentDefinitionService = componentDefinitionService;
         this.contextService = contextService;
         this.evaluator = evaluator;
+        this.jobService = jobService;
         this.jobSyncExecutor = jobSyncExecutor;
         this.taskDispatcherDefinitionService = taskDispatcherDefinitionService;
         this.taskExecutionService = taskExecutionService;
@@ -71,28 +75,34 @@ public class JobTestExecutor {
     }
 
     public JobDTO execute(JobParametersDTO jobParametersDTO) {
-        Job job = jobSyncExecutor.execute(jobParametersDTO);
+        Job job = jobSyncExecutor.execute(jobParametersDTO, false);
 
-        return new JobDTO(
-            job, getOutputs(job),
-            CollectionUtils.map(
-                taskExecutionService.getJobTaskExecutions(Validate.notNull(job.getId(), "id")),
-                taskExecution -> {
-                    Map<String, ?> context = taskFileStorage.readContextValue(
-                        contextService.peek(
-                            Validate.notNull(taskExecution.getId(), "id"), Context.Classname.TASK_EXECUTION));
+        try {
+            return new JobDTO(
+                job, getOutputs(job),
+                CollectionUtils.map(
+                    taskExecutionService.getJobTaskExecutions(Validate.notNull(job.getId(), "id")),
+                    taskExecution -> {
+                        Map<String, ?> context = taskFileStorage.readContextValue(
+                            contextService.peek(
+                                Validate.notNull(taskExecution.getId(), "id"), Context.Classname.TASK_EXECUTION));
 
-                    WorkflowTask workflowTask = taskExecution.getWorkflowTask();
-                    DefinitionResult definitionResult = getDefinition(taskExecution);
+                        WorkflowTask workflowTask = taskExecution.getWorkflowTask();
+                        DefinitionResult definitionResult = getDefinition(taskExecution);
 
-                    Object output = taskExecution.getOutput() == null
-                        ? null
-                        : taskFileStorage.readTaskExecutionOutput(taskExecution.getOutput());
+                        Object output = taskExecution.getOutput() == null
+                            ? null
+                            : taskFileStorage.readTaskExecutionOutput(taskExecution.getOutput());
 
-                    return new TaskExecutionDTO(
-                        taskExecution, definitionResult.title(), definitionResult.icon(),
-                        workflowTask.evaluateParameters(context, evaluator), output);
-                }));
+                        return new TaskExecutionDTO(
+                            taskExecution, definitionResult.title(), definitionResult.icon(),
+                            workflowTask.evaluateParameters(context, evaluator), output);
+                    }));
+        } finally {
+            taskExecutionService.deleteJobTaskExecutions(Validate.notNull(job.getId(), "id"));
+
+            jobService.deleteJob(Validate.notNull(job.getId(), "id"));
+        }
     }
 
     private DefinitionResult getDefinition(TaskExecution taskExecution) {

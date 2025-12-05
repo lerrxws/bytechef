@@ -23,6 +23,7 @@ import com.fasterxml.jackson.core.util.DefaultIndenter;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.DocumentContext;
@@ -47,6 +48,10 @@ public class JsonUtils {
 
     private static Configuration configuration;
     private static ObjectMapper objectMapper;
+
+    public static ObjectNode createObjectNode() {
+        return objectMapper.createObjectNode();
+    }
 
     public static Object read(InputStream inputStream) {
         try {
@@ -377,6 +382,14 @@ public class JsonUtils {
                 .writeValueAsString(object);
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    public static byte[] writeValueAsBytes(Object value) {
+        try {
+            return objectMapper.writeValueAsBytes(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Failed to serialize value for size check.", e);
         }
     }
 

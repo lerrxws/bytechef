@@ -18,7 +18,6 @@ package com.bytechef.platform.workflow.validator;
 
 import com.bytechef.commons.util.StringUtils;
 import com.bytechef.platform.workflow.validator.model.PropertyInfo;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Map;
@@ -45,11 +44,11 @@ class TaskValidator {
      */
     public static void validateAllTasks(ValidationContext context) {
         for (JsonNode taskJsonNode : context.getTasks()) {
-            validateTask(taskJsonNode.toString(), context.getErrors());
+            validateTaskStructure(taskJsonNode.toString(), context.getErrors());
 
             List<PropertyInfo> taskDefinition = validateTaskParameters(taskJsonNode, context);
 
-            processNestedTaskValidation(taskJsonNode, context);
+            processTaskDispatcher(taskJsonNode, context);
             validateDataPills(taskJsonNode, taskDefinition, context);
         }
     }
@@ -60,22 +59,21 @@ class TaskValidator {
      * @param taskJson the task JSON string to validate
      * @param errors   StringBuilder to collect validation errors
      */
-    public static void validateTask(String taskJson, StringBuilder errors) {
+    public static void validateTaskStructure(String taskJson, StringBuilder errors) {
         JsonNode taskJsonNode = JsonUtils.parseJsonWithErrorHandling(taskJson, errors);
 
         if (taskJsonNode == null) {
             return;
         }
 
-        if (!JsonUtils.validateNodeIsObject(taskJsonNode, "Task", errors)) {
+        if (!JsonUtils.appendErrorNodeIsObject(taskJsonNode, "Task", errors)) {
             return;
         }
 
-        // Validate required task fields
-        FieldValidator.validateRequiredStringField(taskJsonNode, "label", errors);
-        FieldValidator.validateRequiredStringField(taskJsonNode, "name", errors);
-        validateTaskTypeField(taskJsonNode, errors);
-        validateRequiredObjectField(taskJsonNode, "parameters", errors);
+        FieldValidator.appendErrorRequiredStringField(taskJsonNode, "label", errors);
+        FieldValidator.appendErrorRequiredStringField(taskJsonNode, "name", errors);
+        appendErrorTaskTypeField(taskJsonNode, errors);
+        appendErrorRequiredObjectField(taskJsonNode, errors);
     }
 
     /**
@@ -90,22 +88,18 @@ class TaskValidator {
                 String actualType = JsonUtils.getJsonNodeType(taskJsonNode);
 
                 StringUtils.appendWithNewline(ValidationErrorUtils.typeError(path, "object", actualType), errors);
+            } else {
+                validateTaskStructure(taskJsonNode.toString(), errors);
 
-                continue;
-            }
+                if (taskJsonNode.has("parameters") && taskJsonNode.has("type")) {
+                    JsonNode parametersJsonNode = taskJsonNode.get("parameters");
 
-            validateTask(taskJsonNode.toString(), errors);
+                    if (!parametersJsonNode.isObject()) {
+                        String actualType = JsonUtils.getJsonNodeType(parametersJsonNode);
 
-            // If task has parameters, validate them recursively if we have the task type
-            if (taskJsonNode.has("parameters") && taskJsonNode.has("type")) {
-                JsonNode parametersJsonNode = taskJsonNode.get("parameters");
-
-                // Basic parameter structure validation
-                if (!parametersJsonNode.isObject()) {
-                    String actualType = JsonUtils.getJsonNodeType(parametersJsonNode);
-
-                    StringUtils.appendWithNewline(
-                        ValidationErrorUtils.typeError(path + ".parameters", "object", actualType), errors);
+                        StringUtils.appendWithNewline(
+                            ValidationErrorUtils.typeError(path + ".parameters", "object", actualType), errors);
+                    }
                 }
             }
         }
@@ -124,23 +118,12 @@ class TaskValidator {
 
         JsonNode taskParametersJsonNode = JsonUtils.parseJsonWithErrorHandling(taskParameters, errors);
 
-        if (!JsonUtils.validateNodeIsObject(taskParametersJsonNode, "Current task parameters", errors)) {
+        if (!JsonUtils.appendErrorNodeIsObject(taskParametersJsonNode, "Current task parameters", errors)) {
             return;
         }
 
-        try {
-            String originalTaskDefinition = WorkflowUtils.convertPropertyInfoToJson(taskDefinition);
-
-            String processedTaskDefinition = WorkflowUtils.processDisplayConditions(
-                originalTaskDefinition, taskParameters);
-
-            validateProcessedTaskDefinition(
-                taskParametersJsonNode, taskParameters, processedTaskDefinition, originalTaskDefinition, errors,
-                warnings);
-
-        } catch (RuntimeException e) {
-            handleDisplayConditionError(e, taskDefinition, taskParameters, errors, warnings);
-        }
+        PropertyValidator.validatePropertiesFromPropertyInfo(
+            taskParametersJsonNode, taskDefinition, "", taskParameters, errors, warnings);
     }
 
     /**
@@ -184,138 +167,10 @@ class TaskValidator {
         }
     }
 
-    private static void handleDisplayConditionError(
-        RuntimeException exception, List<PropertyInfo> taskDefinition, String taskParameters, StringBuilder errors,
-        StringBuilder warnings) {
-
-        String message = exception.getMessage();
-
-        if (message != null && message.startsWith("Invalid logic for display condition:")) {
-            // Extract the condition from the error message to check if it's truly malformed
-            String condition = extractConditionFromMessage(message);
-
-            boolean isActuallyMalformed = isMalformedCondition(condition);
-
-            try {
-                String cleanedTaskDefinition = removeObjectsWithInvalidConditions(
-                    WorkflowUtils.convertPropertyInfoToJson(taskDefinition));
-
-                JsonNode taskDefinitionJsonNode = com.bytechef.commons.util.JsonUtils.readTree(cleanedTaskDefinition);
-
-                JsonNode parametersDefinitionJsonNode = taskDefinitionJsonNode.get("parameters");
-
-                if (parametersDefinitionJsonNode != null && parametersDefinitionJsonNode.isObject()) {
-                    JsonNode taskParametersJsonNode = com.bytechef.commons.util.JsonUtils.readTree(taskParameters);
-
-                    PropertyValidator.validatePropertiesRecursively(
-                        taskParametersJsonNode, parametersDefinitionJsonNode, "", cleanedTaskDefinition, taskParameters,
-                        errors, warnings);
-                }
-
-                // Add warning for truly malformed conditions even if cleanup succeeded
-                if (isActuallyMalformed) {
-                    StringUtils.appendWithNewline(message, warnings);
-                }
-            } catch (Exception ignored) {
-                // Add warning for truly malformed conditions when cleanup fails
-                if (isActuallyMalformed) {
-                    StringUtils.appendWithNewline(message, warnings);
-                }
-            }
-        } else {
-            throw exception;
-        }
-    }
-
-    /**
-     * Extracts the condition from the error message.
-     */
-    private static String extractConditionFromMessage(String message) {
-        if (!message.startsWith("Invalid logic for display condition:")) {
-            return "";
-        }
-
-        int startQuote = message.indexOf('\'');
-
-        if (startQuote == -1) {
-            return "";
-        }
-
-        int endQuote = message.lastIndexOf('\'');
-
-        if (endQuote == startQuote) {
-            return "";
-        }
-
-        return message.substring(startQuote + 1, endQuote);
-    }
-
-    /**
-     * Determines if a condition is malformed (has invalid syntax) vs. valid syntax that fails evaluation.
-     */
-    private static boolean isMalformedCondition(String condition) {
-        String trim = condition.trim();
-
-        if (trim.isEmpty()) {
-            return false;
-        }
-
-        // Clean the condition by removing @ markers if present
-        String cleanCondition = trim;
-
-        if (cleanCondition.startsWith("@") && cleanCondition.endsWith("@")) {
-            cleanCondition = cleanCondition.substring(1, cleanCondition.length() - 1);
-        }
-
-        // Basic syntax validation patterns for common expression types
-        // Valid patterns include: field comparisons, function calls, boolean operations
-
-        // Pattern 1: Simple field comparisons (field == value, field != value, field >= value, etc.)
-        // Supports field names with dots, brackets, and 'index' placeholder
-        if (cleanCondition.matches("\\s*[a-zA-Z_][\\w.\\[\\]index]*\\s*(==|!=|<=|>=|<|>)\\s*.*")) {
-            return false; // Valid comparison syntax
-        }
-
-        // Pattern 2: Function calls like contains({...}, field)
-        if (cleanCondition.matches("\\s*\\w+\\s*\\([^)]*\\).*")) {
-            return false; // Valid function call syntax
-        }
-
-        // Pattern 3: Boolean operations with AND/OR
-        if (cleanCondition.matches(".*\\s+(&&|\\|\\||and|or)\\s+.*")) {
-            return false; // Valid boolean operation syntax
-        }
-
-        // Pattern 4: Simple field references (including those with [index] placeholders)
-        if (cleanCondition.matches("\\s*[a-zA-Z_][\\w.\\[\\]index]*\\s*")) {
-            return false; // Valid field reference
-        }
-
-        // Pattern 5: Literal values (true, false, numbers, strings)
-        return !cleanCondition.matches("\\s*(true|false|\\d+(\\.\\d+)?|'[^']*')\\s*"); // Valid literal
-
-        // If none of the valid patterns match, it's likely malformed
-    }
-
-    /**
-     * Handles JsonProcessingException with context-aware error messages.
-     */
-    private static void handleJsonProcessingException(
-        JsonProcessingException exception, String json, StringBuilder errors) {
-
-        if (exception.getMessage() != null && json.contains("\"type\":") && json.contains("triggers")) {
-            errors.append("Trigger must be an object\n");
-        } else {
-            errors.append("Invalid JSON format: ");
-            errors.append(exception.getMessage());
-            errors.append("\n");
-        }
-    }
-
     /**
      * Strategy to determine if a task type supports nested tasks.
      */
-    private static boolean isLoopTaskType(String taskType) {
+    private static boolean isTaskDispatcher(String taskType) {
         return taskType.matches("^\\w+/\\w+$");
     }
 
@@ -339,10 +194,10 @@ class TaskValidator {
      */
     private static void processIndividualNestedTask(JsonNode nestedTask, ValidationContext context) {
         addNestedTaskToContext(nestedTask, context);
-        validateNestedTaskStructure(nestedTask, context);
+        validateTaskStructure(nestedTask, context);
         validateNestedTaskParameters(nestedTask, context);
         validateNestedTaskDataPills(nestedTask, context);
-        processNestedTaskValidation(nestedTask, context);
+        processTaskDispatcher(nestedTask, context);
     }
 
     /**
@@ -361,7 +216,7 @@ class TaskValidator {
     /**
      * Main entry point for nested task processing. Uses the strategy pattern to handle different nested task scenarios.
      */
-    private static void processNestedTaskValidation(JsonNode task, ValidationContext context) {
+    private static void processTaskDispatcher(JsonNode task, ValidationContext context) {
         if (!task.has("parameters")) {
             return;
         }
@@ -371,7 +226,7 @@ class TaskValidator {
         String taskType = task.get("type")
             .asText();
 
-        if (!isLoopTaskType(taskType)) {
+        if (!isTaskDispatcher(taskType)) {
             return;
         }
 
@@ -406,47 +261,26 @@ class TaskValidator {
         processNestedTaskArray(jsonNode, context);
     }
 
-    /**
-     * Removes objects with invalid display conditions from JSON.
-     */
-    private static String removeObjectsWithInvalidConditions(String json) {
-        try {
-            String result = json;
-
-            // Remove objects that have metadata (display conditions)
-            result = result.replaceAll("\"[^\"]+\"\\s*:\\s*\\{[^{}]*\"metadata\"\\s*:\\s*\"[^\"]*\"[^{}]*}", "");
-
-            // Clean up any resulting JSON syntax issues
-            result = JsonUtils.cleanupJsonSyntax(result);
-
-            return result;
-        } catch (Exception e) {
-            return json;
-        }
-    }
-
     private static void validateDataPills(
         JsonNode task, @Nullable List<PropertyInfo> taskDefinition, ValidationContext context) {
 
         if (taskDefinition != null && !taskDefinition.isEmpty()) {
-            DataPillValidator.validateTaskDataPills(
-                task, context.getTaskOutputs(), context.getTaskNames(), context.getTaskNameToTypeMap(),
-                context.getErrors(), context.getWarnings(), context.getAllTasksMap(), taskDefinition, false, true);
+            DataPillValidator.validateTaskDataPills(task, context, taskDefinition, false);
         }
     }
 
     /**
      * Validates the structure of a nested task.
      */
-    private static void validateNestedTaskStructure(JsonNode nestedTaskJsonNode, ValidationContext context) {
-        validateTask(nestedTaskJsonNode.toString(), context.getErrors());
+    private static void validateTaskStructure(JsonNode nestedTaskJsonNode, ValidationContext context) {
+        validateTaskStructure(nestedTaskJsonNode.toString(), context.getErrors());
     }
 
     /**
      * Validates parameters of a nested task.
      */
-    private static void validateNestedTaskParameters(JsonNode nestedTaskJsonNode, ValidationContext context) {
-        JsonNode typeJsonNode = nestedTaskJsonNode.get("type");
+    private static void validateNestedTaskParameters(JsonNode taskJsonNode, ValidationContext context) {
+        JsonNode typeJsonNode = taskJsonNode.get("type");
 
         String type = typeJsonNode.asText();
 
@@ -456,7 +290,7 @@ class TaskValidator {
 
         if (nestedTaskDefinition != null) {
             String nestedTaskParameters = "{}";
-            JsonNode parametersJsonNode = nestedTaskJsonNode.get("parameters");
+            JsonNode parametersJsonNode = taskJsonNode.get("parameters");
 
             if (parametersJsonNode != null && parametersJsonNode.isObject()) {
                 nestedTaskParameters = parametersJsonNode.toString();
@@ -479,55 +313,23 @@ class TaskValidator {
 
         List<PropertyInfo> nestedTaskDefinition = taskDefinitionsMap.get(type);
 
-        // Skip task order validation for nested tasks
         DataPillValidator.validateTaskDataPills(
-            nestedTaskJsonNode, context.getTaskOutputs(), context.getTaskNames(), context.getTaskNameToTypeMap(),
-            context.getErrors(), context.getWarnings(), context.getAllTasksMap(), nestedTaskDefinition, true);
-    }
-
-    private static void validateProcessedTaskDefinition(
-        JsonNode taskParametersJsonNode, String taskParameters, String processedTaskDefinition,
-        String originalTaskDefinition, StringBuilder errors, StringBuilder warnings) {
-
-        try {
-            JsonNode taskDefinitionJsonNode = com.bytechef.commons.util.JsonUtils.readTree(processedTaskDefinition);
-
-            if (!JsonUtils.validateNodeIsObject(taskDefinitionJsonNode, "Task definition", errors)) {
-                return;
-            }
-
-            JsonNode parametersDefinitionJsonNode = taskDefinitionJsonNode.get("parameters");
-
-            if (parametersDefinitionJsonNode == null || !parametersDefinitionJsonNode.isObject()) {
-                errors.append("Task definition must have a 'parameters' object");
-
-                return;
-            }
-
-            // For array validation with display conditions, use the original definition
-            PropertyValidator.validatePropertiesRecursively(
-                taskParametersJsonNode, parametersDefinitionJsonNode, "", processedTaskDefinition,
-                originalTaskDefinition, taskParameters, errors, warnings);
-        } catch (Exception e) {
-            handleJsonProcessingException((JsonProcessingException) e.getCause(), processedTaskDefinition, errors);
-
-        }
+            nestedTaskJsonNode, context, nestedTaskDefinition, true);
     }
 
     /**
-     * Validates that a required object field exists and is of the correct type.
+     * Validates that a required object field exists and is of correct type.
      */
-    private static void validateRequiredObjectField(
-        JsonNode jsonNode, @Nullable String fieldName, StringBuilder errors) {
-
-        if (!jsonNode.has(fieldName)) {
-            StringUtils.appendWithNewline("Missing required field: " + fieldName, errors);
+    private static void
+        appendErrorRequiredObjectField(JsonNode jsonNode, StringBuilder errors) {
+        if (!jsonNode.has("parameters")) {
+            StringUtils.appendWithNewline("Missing required field: " + "parameters", errors);
         } else {
-            JsonNode fieldJsonNode = jsonNode.get(fieldName);
+            JsonNode fieldJsonNode = jsonNode.get("parameters");
 
             if (!fieldJsonNode.isObject()) {
                 StringUtils.appendWithNewline(
-                    "Field '" + fieldName + "' must be an object", errors);
+                    "Field '" + "parameters" + "' must be an object", errors);
             }
         }
     }
@@ -559,7 +361,7 @@ class TaskValidator {
     /**
      * Validates task type field against required pattern.
      */
-    private static void validateTaskTypeField(JsonNode taskJsonNode, StringBuilder errors) {
+    private static void appendErrorTaskTypeField(JsonNode taskJsonNode, StringBuilder errors) {
         if (!taskJsonNode.has("type")) {
             StringUtils.appendWithNewline("Missing required field: type", errors);
         } else {

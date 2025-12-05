@@ -32,6 +32,7 @@ import static com.bytechef.component.google.calendar.constant.GoogleCalendarCons
 import static com.bytechef.google.commons.GoogleUtils.getCalendarTimezone;
 import static com.bytechef.google.commons.GoogleUtils.translateGoogleIOException;
 
+import com.bytechef.component.definition.ActionDefinition.OptionsFunction;
 import com.bytechef.component.definition.Context;
 import com.bytechef.component.definition.Option;
 import com.bytechef.component.definition.Parameters;
@@ -123,12 +124,17 @@ public class GoogleCalendarUtils {
     }
 
     public static CustomEvent createCustomEvent(Event event, String timezone) {
+        Temporal start = convertToTemporalFromEventDateTime(event.getStart(), timezone);
+        Temporal end = convertToTemporalFromEventDateTime(event.getEnd(), timezone);
+
+        if (end instanceof LocalDate localDateEnd) {
+            end = localDateEnd.minusDays(1);
+        }
+
         return new CustomEvent(
-            event.getICalUID(), event.getId(), event.getSummary(), event.getDescription(),
-            convertToTemporalFromEventDateTime(event.getStart(), timezone),
-            convertToTemporalFromEventDateTime(event.getEnd(), timezone),
-            event.getEtag(), event.getEventType(), event.getHtmlLink(), event.getStatus(), event.getLocation(),
-            event.getHangoutLink(), event.getAttendees(), event.getAttachments(), event.getReminders());
+            event.getICalUID(), event.getId(), event.getSummary(), event.getDescription(), start, end, event.getEtag(),
+            event.getEventType(), event.getHtmlLink(), event.getStatus(), event.getLocation(), event.getHangoutLink(),
+            event.getAttendees(), event.getAttachments(), event.getReminders());
     }
 
     public static List<Option<String>> getCalendarIdOptions(
@@ -136,24 +142,38 @@ public class GoogleCalendarUtils {
         String searchText, Context context) {
 
         Calendar calendar = GoogleServices.getCalendar(connectionParameters);
-        List<CalendarListEntry> calendarListEntries = fetchAllCalendarListEntries(calendar);
+        List<CalendarListEntry> calendarListEntries = getAllCalendarListEntries(calendar, "writer");
 
+        return createOptionsFromCalendarList(calendarListEntries);
+    }
+
+    public static OptionsFunction<String> getCalendarIdOptions(String minAccessRole) {
+        return (inputParameters, connectionParameters, lookupDependsOnPaths, searchText, context) -> {
+
+            Calendar calendar = GoogleServices.getCalendar(connectionParameters);
+            List<CalendarListEntry> calendarListEntries = getAllCalendarListEntries(calendar, minAccessRole);
+
+            return createOptionsFromCalendarList(calendarListEntries);
+        };
+    }
+
+    private static List<Option<String>> createOptionsFromCalendarList(List<CalendarListEntry> calendarListEntries) {
         return calendarListEntries.stream()
             .map(entry -> option(entry.getSummary(), entry.getId()))
             .collect(Collectors.toList());
     }
 
-    private static List<CalendarListEntry> fetchAllCalendarListEntries(Calendar calendar) {
+    private static List<CalendarListEntry> getAllCalendarListEntries(Calendar calendar, String minAccessRole) {
         List<CalendarListEntry> calendarListEntries = new ArrayList<>();
         String nextPageToken = null;
 
         do {
-            CalendarList calendarList = null;
+            CalendarList calendarList;
             try {
                 calendarList = calendar
                     .calendarList()
                     .list()
-                    .setMinAccessRole("writer")
+                    .setMinAccessRole(minAccessRole)
                     .setMaxResults(250)
                     .setPageToken(nextPageToken)
                     .execute();
@@ -270,7 +290,7 @@ public class GoogleCalendarUtils {
         String searchText, Context context) {
 
         Calendar calendar = GoogleServices.getCalendar(connectionParameters);
-        List<Event> events = fetchAllCalendarEvents(calendar, inputParameters.getRequiredString(CALENDAR_ID));
+        List<Event> events = getAllCalendarEvents(calendar, inputParameters.getRequiredString(CALENDAR_ID));
 
         return events.stream()
             .map(event -> {
@@ -282,7 +302,7 @@ public class GoogleCalendarUtils {
             .collect(Collectors.toList());
     }
 
-    private static List<Event> fetchAllCalendarEvents(Calendar calendar, String calendarId) {
+    private static List<Event> getAllCalendarEvents(Calendar calendar, String calendarId) {
         List<Event> allEvents = new ArrayList<>();
         String nextPageToken = null;
 

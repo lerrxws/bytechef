@@ -49,6 +49,7 @@ import com.bytechef.platform.util.SchemaUtils;
 import com.bytechef.platform.util.WorkflowNodeDescriptionUtils;
 import java.util.List;
 import java.util.Map;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
@@ -60,7 +61,7 @@ public class ActionDefinitionServiceImpl implements ActionDefinitionService {
 
     private final ComponentDefinitionRegistry componentDefinitionRegistry;
 
-    public ActionDefinitionServiceImpl(ComponentDefinitionRegistry componentDefinitionRegistry) {
+    public ActionDefinitionServiceImpl(@Lazy ComponentDefinitionRegistry componentDefinitionRegistry) {
         this.componentDefinitionRegistry = componentDefinitionRegistry;
     }
 
@@ -80,8 +81,7 @@ public class ActionDefinitionServiceImpl implements ActionDefinitionService {
             return propertiesFunction
                 .apply(
                     convertResult.inputParameters, convertResult.connectionParameters,
-                    convertResult.lookupDependsOnPathsMap,
-                    context)
+                    convertResult.lookupDependsOnPathsMap, context)
                 .stream()
                 .map(valueProperty -> (Property) Property.toProperty(valueProperty))
                 .toList();

@@ -32,9 +32,9 @@ import com.bytechef.atlas.file.storage.TaskFileStorage;
 import com.bytechef.commons.util.MapUtils;
 import com.bytechef.evaluator.Evaluator;
 import com.bytechef.task.dispatcher.condition.util.ConditionTaskUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -146,12 +146,18 @@ public class ConditionTaskCompletionHandler implements TaskCompletionHandler {
         else {
             conditionTaskExecution.setEndDate(Instant.now());
 
+            conditionTaskExecution = taskExecutionService.update(conditionTaskExecution);
+
             taskCompletionHandler.handle(conditionTaskExecution);
         }
     }
 
     private static List<WorkflowTask> getSubWorkflowTasks(TaskExecution conditionTaskExecution, String caseTrue) {
-        return MapUtils.getList(
-            conditionTaskExecution.getParameters(), caseTrue, WorkflowTask.class, Collections.emptyList());
+        return MapUtils
+            .getList(
+                conditionTaskExecution.getParameters(), caseTrue, new TypeReference<Map<String, ?>>() {}, List.of())
+            .stream()
+            .map(WorkflowTask::new)
+            .toList();
     }
 }

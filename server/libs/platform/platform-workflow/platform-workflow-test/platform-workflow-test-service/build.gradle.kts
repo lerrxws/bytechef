@@ -9,8 +9,9 @@ dependencies {
     implementation(project(":server:libs:atlas:atlas-worker:atlas-worker-api"))
     implementation(project(":server:libs:core:commons:commons-util"))
     implementation(project(":server:libs:core:commons:commons-data"))
-    implementation(project(":server:libs:core:message:message-broker:message-broker-sync"))
+    implementation(project(":server:libs:core:message:message-broker:message-broker-memory"))
     implementation(project(":server:libs:core:file-storage:file-storage-base64-service"))
+    implementation(project(":server:libs:core:tenant:tenant-api"))
     implementation(project(":server:libs:platform:platform-configuration:platform-configuration-api"))
     implementation(project(":server:libs:platform:platform-file-storage:platform-file-storage-api"))
     implementation(project(":server:libs:platform:platform-coordinator"))
@@ -24,6 +25,7 @@ dependencies {
     implementation(project(":server:libs:modules:task-dispatchers:fork-join"))
     implementation(project(":server:libs:modules:task-dispatchers:loop"))
     implementation(project(":server:libs:modules:task-dispatchers:map"))
+    implementation(project(":server:libs:modules:task-dispatchers:on-error"))
     implementation(project(":server:libs:modules:task-dispatchers:parallel"))
     implementation(project(":server:libs:modules:task-dispatchers:subflow"))
 }

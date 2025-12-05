@@ -41,7 +41,7 @@ import com.bytechef.component.map.concurrency.CurrentThreadExecutorService;
 import com.bytechef.error.ExecutionError;
 import com.bytechef.evaluator.Evaluator;
 import com.bytechef.file.storage.base64.service.Base64FileStorageService;
-import com.bytechef.message.broker.sync.SyncMessageBroker;
+import com.bytechef.message.broker.memory.SyncMessageBroker;
 import com.bytechef.message.event.MessageEvent;
 import com.bytechef.task.dispatcher.map.MapTaskDispatcher;
 import java.util.ArrayList;
@@ -111,7 +111,7 @@ public class MapTaskDispatcherAdapterTaskHandler implements TaskHandler<List<?>>
 
         TaskWorker taskWorker = new TaskWorker(
             evaluator, getEventPublisher(syncMessageBroker), currentThreadExecutorService::execute, taskHandlerResolver,
-            taskFileStorage);
+            taskFileStorage, List.of());
 
         MapTaskDispatcher mapTaskDispatcher = new MapTaskDispatcher(
             contextService, new CounterServiceImpl(new InMemoryCounterRepository(cacheManager)), evaluator,

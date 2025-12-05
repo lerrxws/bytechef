@@ -7,6 +7,8 @@ spring:
 springdoc:
   api-docs:
     enabled: false
+  swagger-ui:
+    enabled: false
 ---
 
 info:
@@ -28,6 +30,13 @@ info:
   signUp:
     activationRequired: ${bytechef.sign-up.activation-required}
     enabled: ${bytechef.sign-up.enabled}
+
+logging:
+  level:
+    ROOT: INFO
+    org.quartz: WARN
+    org.jline: ERROR
+    com.bytechef.ee.platform.scheduler.tenant: ERROR
 
 management:
   endpoints:
@@ -59,6 +68,8 @@ management:
   health:
     neo4j:
       enabled: false
+    redis:
+      enabled: false
   info:
     git:
       mode: full
@@ -85,9 +96,10 @@ management:
   prometheus:
     metrics:
       export:
-        enabled: true
+        enabled: ${bytechef.observability.enabled}
         step: 60
   tracing:
+    enabled: ${bytechef.observability.enabled}
     sampling:
       probability: 1.0
   otlp:
@@ -106,13 +118,6 @@ spring:
     chat:
       client:
         enabled: ${bytechef.ai.copilot.enabled}
-    mcp:
-      server:
-        name: bytechef-mcp-server
-        protocol: streamable
-        type: async
-        streamable-http:
-          mcp-endpoint: /api/mcp
     model:
       audio:
         speech: none
@@ -141,12 +146,18 @@ spring:
   application:
     name: server-app
   autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.neo4j.Neo4jAutoConfiguration
+    exclude:
+      org.springframework.boot.autoconfigure.neo4j.Neo4jAutoConfiguration,
+      org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
   cache:
     type: ${bytechef.cache.provider}
   cloud:
     aws:
+      s3:
+        enabled: false
       secretsmanager:
+        enabled: false
+      sqs:
         enabled: false
   datasource:
     type: com.zaxxer.hikari.HikariDataSource
@@ -198,9 +209,14 @@ spring:
       direct:
         prefetch: 1
   shell:
+    interactive:
+      enabled: false
+    history:
+      enabled: false
     noninteractive:
       enabled: false
   quartz:
+    auto-startup: false
     job-store-type: jdbc
     jdbc:
       initialize-schema: never
@@ -251,16 +267,21 @@ bytechef:
           options:
             model: claude-sonnet-4-5
             temperature: 0.5
-      chat:
-        provider: openai
-      embedding:
-        provider: openai
+        embedding:
+          provider: openai
+          openai:
+            options:
+              model: text-embedding-3-small
+      provider: openai
       enabled: false
       openai:
         chat:
           options:
             model: gpt-4.1
             temperature: 0.5
+        embedding:
+          options:
+            model: text-embedding-3-small
   analytics:
     enabled: false
   cache:
@@ -303,8 +324,8 @@ bytechef:
       enable: false
       required: false
   message-broker:
-    # Messaging provider between Coordinator and Workers (amqp | jms | kafka | redis) default: jms
-    provider: jms
+    # Messaging provider between Coordinator and Workers (amqp | jms | kafka | memory | redis) default: memory
+    provider: memory
   oauth2:
 #    predefinedApps:
 #      mailchimp:

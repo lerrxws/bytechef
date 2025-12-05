@@ -16,6 +16,8 @@
 
 package com.bytechef.platform.workflow.test.config;
 
+import static com.bytechef.tenant.constant.TenantConstants.CURRENT_TENANT_ID;
+
 import com.bytechef.atlas.configuration.service.WorkflowService;
 import com.bytechef.atlas.coordinator.task.completion.TaskCompletionHandlerFactory;
 import com.bytechef.atlas.coordinator.task.dispatcher.TaskDispatcherResolverFactory;
@@ -41,7 +43,8 @@ import com.bytechef.component.map.MapTaskDispatcherAdapterTaskHandler;
 import com.bytechef.component.map.constant.MapConstants;
 import com.bytechef.evaluator.Evaluator;
 import com.bytechef.file.storage.base64.service.Base64FileStorageService;
-import com.bytechef.message.broker.sync.SyncMessageBroker;
+import com.bytechef.message.broker.MessageBroker;
+import com.bytechef.message.broker.memory.AsyncMessageBroker;
 import com.bytechef.message.event.MessageEvent;
 import com.bytechef.platform.component.service.ComponentDefinitionService;
 import com.bytechef.platform.coordinator.job.JobSyncExecutor;
@@ -62,8 +65,11 @@ import com.bytechef.task.dispatcher.loop.LoopTaskDispatcher;
 import com.bytechef.task.dispatcher.loop.completion.LoopTaskCompletionHandler;
 import com.bytechef.task.dispatcher.map.MapTaskDispatcher;
 import com.bytechef.task.dispatcher.map.completion.MapTaskCompletionHandler;
+import com.bytechef.task.dispatcher.on.error.OnErrorTaskDispatcher;
+import com.bytechef.task.dispatcher.on.error.completition.OnErrorTaskCompletionHandler;
 import com.bytechef.task.dispatcher.parallel.ParallelTaskDispatcher;
 import com.bytechef.task.dispatcher.parallel.completion.ParallelTaskCompletionHandler;
+import com.bytechef.tenant.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.springframework.cache.CacheManager;
@@ -71,6 +77,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.core.task.TaskExecutor;
 
 /**
  * @author Ivica Cardic
@@ -81,12 +88,13 @@ public class TestExecutorConfiguration {
     @Bean
     JobTestExecutor jobTestExecutor(
         CacheManager cacheManager, ComponentDefinitionService componentDefinitionService, Environment environment,
-        Evaluator evaluator, ObjectMapper objectMapper, TaskHandlerRegistry taskHandlerRegistry,
-        TaskDispatcherDefinitionService taskDispatcherDefinitionService, WorkflowService workflowService) {
+        Evaluator evaluator, ObjectMapper objectMapper, TaskExecutor taskExecutor,
+        TaskHandlerRegistry taskHandlerRegistry, TaskDispatcherDefinitionService taskDispatcherDefinitionService,
+        WorkflowService workflowService) {
 
         ContextService contextService = new ContextServiceImpl(new InMemoryContextRepository(cacheManager));
         CounterService counterService = new CounterServiceImpl(new InMemoryCounterRepository(cacheManager));
-        SyncMessageBroker syncMessageBroker = new SyncMessageBroker();
+        AsyncMessageBroker asyncMessageBroker = new AsyncMessageBroker(environment);
 
         InMemoryTaskExecutionRepository taskExecutionRepository = new InMemoryTaskExecutionRepository(cacheManager);
 
@@ -97,22 +105,29 @@ public class TestExecutorConfiguration {
         TaskFileStorage taskFileStorage = new TaskFileStorageImpl(new Base64FileStorageService());
 
         return new JobTestExecutor(
-            componentDefinitionService, contextService, evaluator,
+            componentDefinitionService, contextService, evaluator, jobService,
             new JobSyncExecutor(
-                contextService, environment, evaluator, jobService, syncMessageBroker,
+                contextService, evaluator, jobService, 1000, () -> asyncMessageBroker,
                 getTaskCompletionHandlerFactories(
                     contextService, counterService, evaluator, taskExecutionService, taskFileStorage),
-                getTaskDispatcherAdapterFactories(cacheManager, evaluator),
+                getTaskDispatcherAdapterFactories(
+                    cacheManager, evaluator),
                 List.of(new TestTaskDispatcherPreSendProcessor(jobService)),
                 getTaskDispatcherResolverFactories(
-                    contextService, counterService, evaluator, jobService, syncMessageBroker,
-                    taskExecutionService, taskFileStorage),
-                taskExecutionService, taskHandlerRegistry, taskFileStorage, workflowService),
+                    contextService, counterService, evaluator, jobService, asyncMessageBroker, taskExecutionService,
+                    taskFileStorage),
+                taskExecutionService, taskExecutor, taskHandlerRegistry, taskFileStorage, 300, workflowService),
             taskDispatcherDefinitionService, taskExecutionService, taskFileStorage);
     }
 
-    private static ApplicationEventPublisher getEventPublisher(SyncMessageBroker syncMessageBroker) {
-        return event -> syncMessageBroker.send(((MessageEvent<?>) event).getRoute(), event);
+    private static ApplicationEventPublisher createEventPublisher(MessageBroker messageBroker) {
+        return event -> {
+            MessageEvent<?> messageEvent = (MessageEvent<?>) event;
+
+            messageEvent.putMetadata(CURRENT_TENANT_ID, TenantContext.getCurrentTenantId());
+
+            messageBroker.send(((MessageEvent<?>) event).getRoute(), event);
+        };
     }
 
     private List<TaskCompletionHandlerFactory> getTaskCompletionHandlerFactories(
@@ -136,6 +151,9 @@ public class TestExecutorConfiguration {
                 taskFileStorage),
             (taskCompletionHandler, taskDispatcher) -> new MapTaskCompletionHandler(
                 contextService, counterService, evaluator, taskDispatcher, taskCompletionHandler, taskExecutionService,
+                taskFileStorage),
+            (taskCompletionHandler, taskDispatcher) -> new OnErrorTaskCompletionHandler(
+                contextService, evaluator, taskCompletionHandler, taskDispatcher, taskExecutionService,
                 taskFileStorage),
             (taskCompletionHandler, taskDispatcher) -> new ParallelTaskCompletionHandler(
                 counterService, taskCompletionHandler, taskExecutionService));
@@ -161,10 +179,10 @@ public class TestExecutorConfiguration {
 
     private List<TaskDispatcherResolverFactory> getTaskDispatcherResolverFactories(
         ContextService contextService, CounterService counterService, Evaluator evaluator, JobService jobService,
-        SyncMessageBroker syncMessageBroker, TaskExecutionService taskExecutionService,
+        AsyncMessageBroker asyncMessageBroker, TaskExecutionService taskExecutionService,
         TaskFileStorage taskFileStorage) {
 
-        ApplicationEventPublisher eventPublisher = getEventPublisher(syncMessageBroker);
+        ApplicationEventPublisher eventPublisher = createEventPublisher(asyncMessageBroker);
 
         return List.of(
             (taskDispatcher) -> new WaitForApprovalTaskDispatcher(eventPublisher, jobService, taskExecutionService),
@@ -184,6 +202,8 @@ public class TestExecutorConfiguration {
             (taskDispatcher) -> new MapTaskDispatcher(
                 contextService, counterService, evaluator, eventPublisher, taskDispatcher, taskExecutionService,
                 taskFileStorage),
+            (taskDispatcher) -> new OnErrorTaskDispatcher(
+                contextService, evaluator, eventPublisher, taskDispatcher, taskExecutionService, taskFileStorage),
             (taskDispatcher) -> new ParallelTaskDispatcher(
                 contextService, counterService, eventPublisher, taskDispatcher, taskExecutionService,
                 taskFileStorage));

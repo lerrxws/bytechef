@@ -1,6 +1,10 @@
 import Button from '@/components/Button/Button';
 import EmptyList from '@/components/EmptyList';
+import {ButtonGroup} from '@/components/ui/button-group';
+import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from '@/components/ui/dropdown-menu';
 import {Skeleton} from '@/components/ui/skeleton';
+import {useToast} from '@/hooks/use-toast';
+import handleImportWorkflow from '@/pages/automation/project/utils/handleImportWorkflow';
 import ProjectWorkflowListItem from '@/pages/automation/projects/components/project-workflow-list/ProjectWorkflowListItem';
 import WorkflowDialog from '@/shared/components/workflow/WorkflowDialog';
 import {useAnalytics} from '@/shared/hooks/useAnalytics';
@@ -9,15 +13,25 @@ import {ComponentDefinitionBasic} from '@/shared/middleware/platform/configurati
 import {useCreateProjectWorkflowMutation} from '@/shared/mutations/automation/workflows.mutations';
 import {useGetComponentDefinitionsQuery} from '@/shared/queries/automation/componentDefinitions.queries';
 import {useGetProjectWorkflowsQuery} from '@/shared/queries/automation/projectWorkflows.queries';
+import {ProjectKeys} from '@/shared/queries/automation/projects.queries';
 import {useGetWorkflowQuery} from '@/shared/queries/automation/workflows.queries';
 import {useGetTaskDispatcherDefinitionsQuery} from '@/shared/queries/platform/taskDispatcherDefinitions.queries';
-import {WorkflowIcon} from 'lucide-react';
+import {useFeatureFlagsStore} from '@/shared/stores/useFeatureFlagsStore';
+import {useQueryClient} from '@tanstack/react-query';
+import {ChevronDownIcon, LayoutTemplateIcon, UploadIcon, WorkflowIcon} from 'lucide-react';
+import {useRef, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 
 const ProjectWorkflowList = ({project}: {project: Project}) => {
-    const {captureProjectWorkflowCreated} = useAnalytics();
+    const [showWorkflowDialog, setShowWorkflowDialog] = useState(false);
 
+    const {captureProjectWorkflowCreated, captureProjectWorkflowImported} = useAnalytics();
     const navigate = useNavigate();
+    const {toast} = useToast();
+
+    const hiddenFileInputRef = useRef<HTMLInputElement>(null);
+
+    const ff_1041 = useFeatureFlagsStore()('ff-1041');
 
     const {data: componentDefinitions, isLoading: isComponentDefinitionsLoading} = useGetComponentDefinitionsQuery({
         actionDefinitions: true,
@@ -40,11 +54,30 @@ const ProjectWorkflowList = ({project}: {project: Project}) => {
         [key: string]: ComponentDefinitionBasic | undefined;
     } = {};
 
+    const queryClient = useQueryClient();
+
     const createProjectWorkflowMutation = useCreateProjectWorkflowMutation({
         onSuccess: (projectWorkflowId) => {
             captureProjectWorkflowCreated();
 
             navigate(`/automation/projects/${project.id}/project-workflows/${projectWorkflowId}`);
+        },
+    });
+
+    const importProjectWorkflowMutation = useCreateProjectWorkflowMutation({
+        onSuccess: () => {
+            captureProjectWorkflowImported();
+
+            queryClient.invalidateQueries({queryKey: ProjectKeys.project(project.id!)});
+            queryClient.invalidateQueries({queryKey: ProjectKeys.projects});
+
+            if (hiddenFileInputRef.current) {
+                hiddenFileInputRef.current.value = '';
+            }
+
+            toast({
+                description: 'Workflow is imported.',
+            });
         },
     });
 
@@ -123,7 +156,53 @@ const ProjectWorkflowList = ({project}: {project: Project}) => {
                             <WorkflowDialog
                                 createWorkflowMutation={createProjectWorkflowMutation}
                                 projectId={project.id}
-                                triggerNode={<Button label="Create Workflow" />}
+                                triggerNode={
+                                    <ButtonGroup className="mx-auto">
+                                        <Button
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+
+                                                setShowWorkflowDialog(true);
+                                            }}
+                                        >
+                                            Create Workflow
+                                        </Button>
+
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button>
+                                                    <ChevronDownIcon />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+
+                                            <DropdownMenuContent align="end">
+                                                {ff_1041 && (
+                                                    <DropdownMenuItem
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+
+                                                            navigate(`./${project.id}/templates`);
+                                                        }}
+                                                    >
+                                                        <LayoutTemplateIcon /> From Template
+                                                    </DropdownMenuItem>
+                                                )}
+
+                                                <DropdownMenuItem
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+
+                                                        if (hiddenFileInputRef.current) {
+                                                            hiddenFileInputRef.current.click();
+                                                        }
+                                                    }}
+                                                >
+                                                    <UploadIcon /> Import Workflow
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </ButtonGroup>
+                                }
                                 useGetWorkflowQuery={useGetWorkflowQuery}
                             />
                         }
@@ -133,6 +212,24 @@ const ProjectWorkflowList = ({project}: {project: Project}) => {
                     />
                 </div>
             )}
+
+            {showWorkflowDialog && (
+                <WorkflowDialog
+                    createWorkflowMutation={createProjectWorkflowMutation}
+                    onClose={() => setShowWorkflowDialog(false)}
+                    projectId={project.id}
+                    useGetWorkflowQuery={useGetWorkflowQuery}
+                />
+            )}
+
+            <input
+                accept=".json,.yaml,.yml"
+                alt="file"
+                className="hidden"
+                onChange={(event) => handleImportWorkflow(event, project.id!, importProjectWorkflowMutation)}
+                ref={hiddenFileInputRef}
+                type="file"
+            />
         </div>
     );
 };

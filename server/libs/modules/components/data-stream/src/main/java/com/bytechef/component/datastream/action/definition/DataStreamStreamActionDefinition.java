@@ -143,7 +143,8 @@ public class DataStreamStreamActionDefinition extends AbstractActionDefinitionWr
                 }
             });
 
-        JobExecution jobExecution = jobLauncher.run(job, jobParameters);
+        JobExecution jobExecution = TenantContext.callWithTenantId(
+            TenantContext.DEFAULT_TENANT_ID, () -> jobLauncher.run(job, jobParameters));
 
         List<Throwable> failureExceptions = jobExecution.getAllFailureExceptions();
 

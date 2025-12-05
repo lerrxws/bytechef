@@ -16,6 +16,7 @@
 
 package com.bytechef.component.microsoft.outlook.util;
 
+import static com.bytechef.component.definition.ComponentDsl.array;
 import static com.bytechef.component.microsoft.outlook.constant.MicrosoftOutlook365Constants.ADDRESS;
 import static com.bytechef.component.microsoft.outlook.constant.MicrosoftOutlook365Constants.BCC_RECIPIENTS;
 import static com.bytechef.component.microsoft.outlook.constant.MicrosoftOutlook365Constants.BODY;
@@ -48,6 +49,7 @@ import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.lang3.tuple.Pair;
 
 /**
  * @author Monika Kušter
@@ -67,7 +69,7 @@ public class MicrosoftOutlook365Utils {
             .toList();
     }
 
-    public static SimpleMessage createSimpleMessage(Context context, Map<?, ?> messageBody, String id) {
+    public static SimpleMessage createSimpleMessage(Context context, Map<?, ?> messageBody) {
         String from = null;
 
         if (messageBody.get(FROM) instanceof Map<?, ?> fromMap &&
@@ -82,11 +84,14 @@ public class MicrosoftOutlook365Utils {
             bodyHtml = (String) map.get(CONTENT);
         }
 
+        String id = (String) messageBody.get(ID);
+        Pair<List<FileEntry>, List<FileEntry>> attachments = getFileEntries(id, context);
+
         return new SimpleMessage(
-            (String) messageBody.get(ID), (String) messageBody.get("conversationId"), (String) messageBody.get(SUBJECT),
-            from, getRecipients(messageBody, TO_RECIPIENTS), getRecipients(messageBody, CC_RECIPIENTS),
+            id, (String) messageBody.get("conversationId"), (String) messageBody.get(SUBJECT), from,
+            getRecipients(messageBody, TO_RECIPIENTS), getRecipients(messageBody, CC_RECIPIENTS),
             getRecipients(messageBody, BCC_RECIPIENTS), (String) messageBody.get("bodyPreview"), bodyHtml,
-            getFileEntries(id, context), (String) messageBody.get("webLink"));
+            attachments.getLeft(), attachments.getRight(), (String) messageBody.get("webLink"));
     }
 
     public static List<Map<String, Object>> getAttachments(Context context, List<FileEntry> attachments) {
@@ -119,8 +124,9 @@ public class MicrosoftOutlook365Utils {
         return body.get(VALUE);
     }
 
-    private static List<FileEntry> getFileEntries(String id, Context context) {
+    private static Pair<List<FileEntry>, List<FileEntry>> getFileEntries(String id, Context context) {
         List<FileEntry> fileEntries = new ArrayList<>();
+        List<FileEntry> inlineFileEntries = new ArrayList<>();
 
         Map<String, Object> attachmentsBody = context
             .http(http -> http.get("/me/messages/%s/attachments".formatted(id)))
@@ -137,12 +143,16 @@ public class MicrosoftOutlook365Utils {
                     FileEntry fileEntry = context.file(
                         file -> file.storeContent((String) map.get(NAME), new ByteArrayInputStream(decodedBytes)));
 
-                    fileEntries.add(fileEntry);
+                    if ((Boolean) map.get("isInline")) {
+                        inlineFileEntries.add(fileEntry);
+                    } else {
+                        fileEntries.add(fileEntry);
+                    }
                 }
             }
         }
 
-        return fileEntries;
+        return Pair.of(fileEntries, inlineFileEntries);
     }
 
     private static List<String> getRecipients(Map<?, ?> body, String recipientType) {
@@ -167,6 +177,13 @@ public class MicrosoftOutlook365Utils {
         return OutputResponse.of(getMessageOutputProperty(inputParameters.getRequired(FORMAT, Format.class)));
     }
 
+    public static OutputResponse getArrayMessageOutput(
+        Parameters inputParameters, Parameters connectionParameters, Context context) {
+
+        return OutputResponse
+            .of(array().items(getMessageOutputProperty(inputParameters.getRequired(FORMAT, Format.class))));
+    }
+
     public static ModifiableObjectProperty getMessageOutputProperty(Format format) {
         return format.equals(SIMPLE) ? SIMPLE_MESSAGE_OUTPUT_PROPERTY : FULL_MESSAGE_OUTPUT_PROPERTY;
     }
@@ -174,6 +191,7 @@ public class MicrosoftOutlook365Utils {
     @SuppressFBWarnings("EI")
     public record SimpleMessage(
         String id, String conversationId, String subject, String from, List<String> to, List<String> cc,
-        List<String> bcc, String bodyPlain, String bodyHtml, List<FileEntry> attachments, String webLink) {
+        List<String> bcc, String bodyPlain, String bodyHtml, List<FileEntry> attachments,
+        List<FileEntry> inlineAttachments, String webLink) {
     }
 }

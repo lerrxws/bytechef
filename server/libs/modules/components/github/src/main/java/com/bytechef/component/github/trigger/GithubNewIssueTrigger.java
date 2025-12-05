@@ -22,21 +22,21 @@ import static com.bytechef.component.definition.ComponentDsl.string;
 import static com.bytechef.component.definition.ComponentDsl.trigger;
 import static com.bytechef.component.github.constant.GithubConstants.ISSUE_OUTPUT_PROPERTY;
 import static com.bytechef.component.github.constant.GithubConstants.REPOSITORY;
+import static com.bytechef.component.github.util.GithubUtils.getItems;
 import static com.bytechef.component.github.util.GithubUtils.getOwnerName;
 
-import com.bytechef.component.definition.Context.Http;
 import com.bytechef.component.definition.Parameters;
 import com.bytechef.component.definition.TriggerContext;
 import com.bytechef.component.definition.TriggerDefinition.OptionsFunction;
 import com.bytechef.component.definition.TriggerDefinition.PollOutput;
 import com.bytechef.component.definition.TriggerDefinition.TriggerType;
-import com.bytechef.component.definition.TypeReference;
 import com.bytechef.component.github.util.GithubUtils;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * @author Monika Kušter
@@ -61,25 +61,26 @@ public class GithubNewIssueTrigger {
         Parameters inputParameters, Parameters connectionParameters, Parameters closureParameters,
         TriggerContext context) {
 
-        ZoneId zoneId = ZoneId.systemDefault();
+        Instant now = Instant.now();
 
-        LocalDateTime now = LocalDateTime.now(zoneId);
+        boolean editorEnvironment = context.isEditorEnvironment();
+        Instant start = closureParameters.get(
+            LAST_TIME_CHECKED, Instant.class,
+            editorEnvironment ? now.minus(Duration.ofHours(3)) : now);
 
-        LocalDateTime startDate = closureParameters.getLocalDateTime(
-            LAST_TIME_CHECKED, context.isEditorEnvironment() ? now.minusHours(3) : now);
+        String timestamp = DateTimeFormatter.ISO_INSTANT.format(start);
 
-        String formattedStartDate = startDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
-            .withZone(zoneId));
+        String url = "/repos/%s/%s/issues".formatted(
+            getOwnerName(context), inputParameters.getRequiredString(REPOSITORY));
 
-        List<Map<String, ?>> issues = context.http(
-            http -> http.get(
-                "/repos/" + getOwnerName(context) + "/" + inputParameters.getRequiredString(REPOSITORY) + "/issues"))
-            .queryParameter("since", formattedStartDate)
-            .configuration(Http.responseType(Http.ResponseType.JSON))
-            .execute()
-            .getBody(new TypeReference<>() {});
+        List<Map<String, ?>> issues = getItems(context, url, editorEnvironment, "since", timestamp);
 
-        return new PollOutput(issues, Map.of(LAST_TIME_CHECKED, now), false);
+        List<Map<String, ?>> filteredIssues = issues.stream()
+            .filter(issue -> Instant.parse((String) issue.get("created_at"))
+                .compareTo(start) >= 0)
+            .collect(Collectors.toList());
+
+        return new PollOutput(filteredIssues, Map.of(LAST_TIME_CHECKED, now), false);
     }
 
     private GithubNewIssueTrigger() {
