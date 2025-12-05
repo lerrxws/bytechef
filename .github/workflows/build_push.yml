@@ -1,8 +1,15 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+# This workflow will build a Java project with Gradle and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-gradle
+
 name: CI Build on PUSH
 
 on:
   push:
-    branches: [ "*" ]  # Trigger on all branches
+    branches: [ "master" ]
 
 permissions:
   contents: read
@@ -14,13 +21,19 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
       - name: Set up GraalVM for JDK 25
         uses: graalvm/setup-graalvm@v1
         with:
           distribution: 'graalvm-community'
           java-version: '25'
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
@@ -39,7 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
       - name: Set up Node 22
         uses: actions/setup-node@v3
         with:
@@ -53,6 +66,13 @@ jobs:
         run: |
           npm ci
           npm run check
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: client/
 
   server:
     runs-on: ubuntu-latest
@@ -60,13 +80,19 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with:
-        fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
+        fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
     - name: Set up GraalVM for JDK 25
       uses: graalvm/setup-graalvm@v1
       with:
         distribution: 'graalvm-community'
         java-version: '25'
         github-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Cache SonarCloud packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.sonar/cache
+        key: ${{ runner.os }}-sonar
+        restore-keys: ${{ runner.os }}-sonar
     - name: Cache Gradle packages
       uses: actions/cache@v4
       with:
@@ -80,7 +106,3 @@ jobs:
         GITHUB_ACTIONS_BUILD: true
       working-directory: server
       run: ../gradlew check --scan --stacktrace
-    - name: Security Scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: bytechef:latest
